@@ -4,25 +4,21 @@ Use this as a compact reference for app integration. Verify current SDK source b
 
 ## Dependency
 
-Prefer Swift Package Manager. Before editing, verify the latest exact tag from the official SPM repository:
+Use Swift Package Manager for TelematicsSDK dependency integration. Before editing dependencies, verify the latest exact tag from the official SPM repository:
 
 ```bash
 git ls-remote --tags --refs https://github.com/Mobile-Telematics/telematicsSDK-iOS-new-SPM.git
 ```
 
-As of the last verification for this skill, the latest tag returned by the official repository was `7.0.3`, so the SPM dependency is:
+Use the highest semantic version tag exactly:
 
 ```swift
-.package(url: "https://github.com/Mobile-Telematics/telematicsSDK-iOS-new-SPM", from: "7.0.3")
+.package(url: "https://github.com/Mobile-Telematics/telematicsSDK-iOS-new-SPM", from: "<latest-spm-tag>")
 ```
 
-Use CocoaPods only when the host app already standardizes on CocoaPods or cannot use SPM:
+As of the last verification for this skill, the SPM repository reported `7.0.3` as the latest version. Do not assume this will remain true. Re-check before each dependency edit.
 
-```ruby
-pod 'TelematicsSDK', '7.0.3'
-```
-
-Do not assume `7.0.3` will remain latest. Check the app lockfile and the local SDK version with `RPEntry.instance.getSdkVersion()` where runtime access is possible.
+Also inspect the target app lockfile (`Package.resolved`) and the runtime SDK version with `RPEntry.instance.getSdkVersion()` where runtime access is possible. Lockfiles and runtime checks tell you what is installed; SPM tags tell you what latest version to integrate.
 
 ## Required iOS Configuration
 

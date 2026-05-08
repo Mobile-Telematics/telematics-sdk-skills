@@ -1,6 +1,6 @@
 ---
 name: ios-telematics-sdk-integration-skill
-description: Use when designing, integrating, migrating, reviewing, or debugging Damoov TelematicsSDK for iOS apps, especially SPM setup, service-layer architecture, RPEntry lifecycle, automatic/manual tracking flows, standard/persistent SDK tracking modes, permissions, future tags, trip tags, and replacing deprecated API from current sdk-ios source.
+description: Use when designing, integrating, migrating, reviewing, or debugging Damoov TelematicsSDK for iOS apps, especially SPM setup, service-layer architecture, RPEntry lifecycle, automatic/manual tracking flows, standard/persistent SDK tracking modes, permissions, future tags, trip tags, and replacing deprecated API from current SDK source.
 metadata:
   short-description: Damoov iOS TelematicsSDK integration
 ---
@@ -16,36 +16,38 @@ If this path does not exist, inspect the SDK version installed in the target app
 ## Workflow
 
 1. Inspect the target iOS app first:
-   - Dependency manager: prefer SPM. Check `Package.swift`, `Package.resolved`, `.xcodeproj`, `.xcworkspace`, then legacy `Podfile`, `Podfile.lock`.
+   - Dependency manager: use SPM. Check `Package.swift`, `Package.resolved`, `.xcodeproj`, and `.xcworkspace`.
    - App lifecycle files: `AppDelegate`, `SceneDelegate`, SwiftUI `App`.
    - Minimum iOS deployment target. Check `IPHONEOS_DEPLOYMENT_TARGET`, project settings, package/platform declarations, and app target metadata where available.
    - Permissions: `Info.plist`, entitlements, Background Modes.
    - Existing SDK usage: `rg -n "RPEntry|TelematicsSDK|RPPermissions|RPTag|RPFutureTag|tracking"`.
 
-2. Verify the exact latest SPM version before editing dependencies:
+2. Use Swift Package Manager for TelematicsSDK dependency integration.
+
+3. Verify the latest exact SDK version from the official SPM repository before editing dependencies:
    - `git ls-remote --tags --refs https://github.com/Mobile-Telematics/telematicsSDK-iOS-new-SPM.git`
-   - Use the highest semantic version tag exactly, for example `from: "7.0.3"` when `7.0.3` is latest.
+   - Use the latest semantic version tag exactly with `.package(..., from: "<latest-spm-tag>")`.
 
-3. Inspect current SDK API before relying on all public APIs (RPEntry, RPAPIEntry etc).
+4. Inspect current SDK API before relying on all public APIs (RPEntry, RPAPIEntry etc).
 
-4. Prefer an app-owned reusable service/facade around `RPEntry` instead of calling the SDK directly from screens or view models. Load `references/architecture.md` before designing or changing integration structure.
+5. Prefer an app-owned reusable service/facade around `RPEntry` instead of calling the SDK directly from screens or view models. Load `references/architecture.md` before designing or changing integration structure.
 
-5. Before implementing a new Telematics service, ask the user which primary tracking flow should be placed first in the service:
+6. Before implementing a new Telematics service, ask the user which primary tracking flow should be placed first in the service:
    - automatic tracking
    - manual tracking
    - manual tracking with required future tags
    - manual tracking with persistent SDK mode
    If the user has already stated the primary flow in the request or existing product code makes it unambiguous, use that flow without asking again.
 
-6. Replace deprecated public API with current API. Load `references/api-migration.md` when touching `RPEntry` methods or properties.
+7. Replace deprecated public API with current API. Load `references/api-migration.md` when touching `RPEntry` methods or properties.
 
-7. For public SDK APIs that are common to every integration, load `references/common-sdk-surface.md`. This includes iOS project setup, lifecycle wiring, `RPEntry` status/config/permission methods, delegates, and `RPEntry.instance.api` (`RPAPIEntry`) methods.
+8. For public SDK APIs that are common to every integration, load `references/common-sdk-surface.md`. This includes iOS project setup, lifecycle wiring, `RPEntry` status/config/permission methods, delegates, and `RPEntry.instance.api` (`RPAPIEntry`) methods.
 
-8. For tracking flow sequences, SDK tracking modes, and tags, load `references/integration-reference.md`.
+9. For tracking flow sequences, SDK tracking modes, and tags, load `references/integration-reference.md`.
 
-9. Implement the service with all supported flows, but order methods so the user's primary flow appears first. Keep changes outside the integration surface minimal. Do not add dependencies beyond TelematicsSDK unless the user explicitly approves.
+10. Implement the service with all supported flows, but order methods so the user's primary flow appears first. Keep changes outside the integration surface minimal. Do not add dependencies beyond TelematicsSDK unless the user explicitly approves.
 
-10. Validate with the narrowest available check:
+11. Validate with the narrowest available check:
    - Prefer `xcodebuild` for the app target/scheme if discoverable.
    - If the project cannot build locally, at least run `swiftc`-independent checks such as `rg` for deprecated symbols and explain the limit.
 

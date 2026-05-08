@@ -8,7 +8,8 @@ Use published Damoov docs as baseline setup guidance, but verify method names an
 
 Every integration should inspect the target app for:
 
-- Dependency manager: prefer Swift Package Manager; use CocoaPods only when the app already standardizes on it.
+- Dependency manager: use Swift Package Manager for TelematicsSDK dependency integration.
+- Latest exact SDK version source: official SPM repository tags.
 - `Info.plist` usage descriptions:
   - `NSLocationAlwaysAndWhenInUseUsageDescription`
   - `NSLocationAlwaysUsageDescription`
