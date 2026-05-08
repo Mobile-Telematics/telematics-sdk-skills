@@ -1,0 +1,7 @@
+interface:
+  display_name: "iOS Telematics SDK Integration"
+  short_description: "Integrate Damoov iOS SDK safely"
+  default_prompt: "Use $ios-telematics-sdk-integration-skill to integrate or migrate Damoov TelematicsSDK usage in this iOS app."
+
+policy:
+  allow_implicit_invocation: true

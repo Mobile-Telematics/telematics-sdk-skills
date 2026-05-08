@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Archives / generated packages
+*.zip
+*.tar
+*.tar.gz
+
+# Node / npx artifacts
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local env
+.env
+.env.*
+
+# Local skills installation artifacts
+.agents/
+skills-lock.json
