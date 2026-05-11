@@ -42,11 +42,14 @@ If this path does not exist, inspect the SDK version installed in the target app
 
 7. Replace deprecated public API with current API. Load `references/api-migration.md` when touching `RPEntry` methods or properties.
 
-8. For public SDK APIs that are common to every integration, load `references/common-sdk-surface.md`. This includes iOS project setup, lifecycle wiring, `RPEntry` status/config/permission methods, delegates, and `RPEntry.instance.api` (`RPAPIEntry`) methods.
+8. For public SDK APIs that are common to every integration, load `references/common-sdk-surface.md`. This includes iOS project setup, lifecycle wiring, `RPEntry` status/config/permission methods, delegates, `TelematicsAPIService`, and `TelematicsTagsService`.
 
 9. For tracking flow sequences, SDK tracking modes, and tags, load `references/integration-reference.md`.
 
-10. Implement a separate `TelematicsAPIService` for every method accessed through `RPEntry.instance.api`. `TelematicsService` must use this API service instead of calling `RPEntry.instance.api` directly.
+10. Implement separate facades for `RPEntry.instance.api`:
+   - `TelematicsAPIService` for track/origin APIs.
+   - `TelematicsTagsService` for track tags and future tags.
+   `TelematicsService` must use `TelematicsTagsService` for tagged tracking flows instead of calling `RPEntry.instance.api` directly.
 
 11. Implement the service with all supported flows, but order methods so the user's primary flow appears first. Keep changes outside the integration surface minimal. Do not add dependencies beyond TelematicsSDK unless the user explicitly approves.
 
@@ -64,7 +67,9 @@ If this path does not exist, inspect the SDK version installed in the target app
 - Lifecycle forwarding methods are mandatory. Do not guard them with `RPEntry.isInitialized`, device ID checks, `hasConfiguredDeviceId`, or similar app-side conditions; the SDK already handles missing device ID or disabled state where applicable.
 - Use `setDeviceID(deviceId:)` / `getDeviceId()` instead of `virtualDeviceToken`.
 - Use method-style setters/getters introduced in `RPEntry` instead of deprecated properties.
-- Put all `RPEntry.instance.api` calls inside a separate `TelematicsAPIService`; do not mix network/tag/track API wrappers into `TelematicsService`.
+- Put track/origin `RPEntry.instance.api` calls inside `TelematicsAPIService`.
+- Put track-tag and future-tag `RPEntry.instance.api` calls inside `TelematicsTagsService`.
+- Do not mix network/tag/track API wrappers into `TelematicsService`.
 - Call `startTracking()` / `stopTracking()` on the main thread.
 - Treat automatic/manual tracking as app-level flows; treat `.standard`/`.persistent` as SDK tracking modes configured with `setTrackingMode`.
 - For persistent SDK mode, prefer `setTrackingMode(.persistent)` plus `startTracking()`; switch back with `setTrackingMode(.standard)` when business logic requires it.
@@ -73,7 +78,8 @@ If this path does not exist, inspect the SDK version installed in the target app
 - Supported flows are: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, persistent manual tracking without tags, and persistent manual tracking with tags.
 - If a future tag is required for a manually started trip, add the tag and handle the completion before starting tracking; otherwise document the race.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
-- Prefer Swift `async`/`await` in the app-owned service API. Keep `RPEntry.instance.api` completion-handler calls private to `TelematicsAPIService`.
+- Required facade methods should preserve the SDK callback signatures unless the host app explicitly prefers async overloads. Async convenience methods may be added, but they must not replace the required callback methods.
+- Add English documentation comments to every public method in `TelematicsService`, `TelematicsAPIService`, and `TelematicsTagsService`.
 - Dispatch SDK completion handlers back to the main queue before updating UI; tag API completions are not guaranteed to arrive on the main thread.
 - Do not silently ignore SDK errors in completions.
 - `TelematicsService` must implement and assign the public SDK delegates except `speedLimitDelegate`: `RPTrackingStateListenerDelegate`, `RPLocationDelegate`, `RPAccuracyAuthorizationDelegate`, `RPLowPowerModeDelegate`, and `RPRTLDDelegate`.

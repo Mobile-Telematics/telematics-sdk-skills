@@ -175,7 +175,7 @@ Supported flows:
 - persistent manual tracking without tags
 - persistent manual tracking with tags
 
-Put all `RPEntry.instance.api` calls behind a separate `TelematicsAPIService`. `TelematicsService` should call the API service for tag operations instead of accessing `RPEntry.instance.api` directly.
+Put track/origin `RPEntry.instance.api` calls behind `TelematicsAPIService`. Put track-tag and future-tag `RPEntry.instance.api` calls behind `TelematicsTagsService`. `TelematicsService` should call the tags service for tag operations instead of accessing `RPEntry.instance.api` directly.
 
 Automatic tracking:
 
@@ -238,6 +238,43 @@ Tracking status:
 let isTracking = RPEntry.instance.isTracking()
 ```
 
+`TelematicsService` should also expose status, diagnostics, uploads, heartbeat, RTLD, and accident-detection controls:
+
+```swift
+/// Returns whether SDK tracking is currently active.
+func isTracking() -> Bool
+
+/// Sends a custom heartbeat with an app-defined reason.
+func sendCustomHeartbeat(_ reason: String)
+
+/// Requests upload of pending trips, buffers, and logs.
+func uploadUnsentTrips()
+
+/// Fetches the number of locally stored trips waiting for upload.
+func getUnsentTripCount(completion: @escaping (_ unsentTripsCount: Int) -> Void)
+
+/// Enables or disables aggressive heartbeat mode.
+func setAggressiveHeartbeats(_ aggressive: Bool)
+
+/// Returns whether aggressive heartbeat mode is enabled.
+func isAggressiveHeartbeats() -> Bool
+
+/// Returns whether RTLD functionality is enabled.
+func isRTLDEnabled() -> Bool
+
+/// Enables or disables accident detection.
+func setAccidentDetectionEnabled(_ enabled: Bool)
+
+/// Returns whether accident detection is enabled.
+func isAccidentDetectionEnabled() -> Bool
+
+/// Sets accident-detection sensitivity.
+func setAccidentDetectionSensitivity(sensitivity: RPAccidentDetectionSensitivity)
+
+/// Returns accident-detection sensitivity.
+func getAccidentDetectionSensitivity() -> RPAccidentDetectionSensitivity
+```
+
 Delegate:
 
 ```swift
@@ -250,22 +287,85 @@ final class DamoovTelematicsService: NSObject, RPTrackingStateListenerDelegate {
 
 `TelematicsService` should assign and implement `trackingStateDelegate`, `locationDelegate`, `accuracyAuthorizationDelegate`, `lowPowerModeDelegate`, and `rtldDelegate`. Generated delegate methods should only call `print(...)`; the app team can replace these bodies later. Do not assign or implement `speedLimitDelegate` unless the user explicitly requests speed-limit behavior.
 
+## Track And Origin API
+
+Track and origin methods belong in `TelematicsAPIService`.
+
+```swift
+final class TelematicsAPIService {
+    /// Fetches a processed track by its public track token.
+    func getTrackWithTrackToken(
+        _ token: String,
+        completion: @escaping (_ track: RPTrackProcessed?, _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.getTrackWithTrackToken(token, completion: completion)
+    }
+
+    /// Fetches processed tracks using server pagination and an optional date range.
+    func getTracksWithOffset(
+        _ offset: UInt,
+        limit: UInt,
+        startDate: Date? = nil,
+        endDate: Date? = nil,
+        completion: @escaping (_ tracks: [RPTrackProcessed], _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.getTracksWithOffset(
+            offset,
+            limit: limit,
+            startDate: startDate,
+            endDate: endDate,
+            completion: completion
+        )
+    }
+
+    /// Fetches available track origin metadata.
+    func getTrackOrigins(
+        completion: @escaping (_ trackOrigins: RPTrackOrigins?, _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.getTrackOrigins(completion: completion)
+    }
+
+    /// Changes the origin metadata for a processed track.
+    func changeTrackOrigin(
+        _ originCode: RPTrackOriginCode,
+        forTrackToken token: String,
+        completion: @escaping (_ code: RPStatusCodeResponse?, _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.changeTrackOrigin(originCode, forTrackToken: token, completion: completion)
+    }
+}
+```
+
 ## Trip Tags
 
 Track-specific tags require a public track token and network connectivity. Completion may not be on the main thread.
 
 ```swift
-final class TelematicsAPIService {
-    func addTrackTags(_ tags: [RPTag], to trackToken: String) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            RPEntry.instance.api.addTrackTags(tags, to: trackToken) { _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
+final class TelematicsTagsService {
+    /// Fetches tags attached to a processed track.
+    func getTrackTags(
+        _ trackToken: String,
+        completion: @escaping (_ tags: [RPTag], _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.getTrackTags(trackToken, completion: completion)
+    }
+
+    /// Adds tags to a processed track.
+    func addTrackTags(
+        _ tags: [RPTag],
+        to trackToken: String,
+        completion: @escaping (_ tags: [RPTag], _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.addTrackTags(tags, to: trackToken, completion: completion)
+    }
+
+    /// Removes tags from a processed track.
+    func removeTrackTags(
+        _ tags: [RPTag],
+        from trackToken: String,
+        completion: @escaping (_ tags: [RPTag], _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.removeTrackTags(tags, from: trackToken, completion: completion)
     }
 }
 ```
@@ -278,7 +378,7 @@ Available methods:
 
 ## Future Tags
 
-Future tags are handled through `RPEntry.instance.api` and `RPFutureTag`. The SDK exposes completion-handler methods; app code should call async `TelematicsAPIService` methods instead of these callbacks directly.
+Future tags are handled through `RPEntry.instance.api` and `RPFutureTag`. The SDK exposes completion-handler methods; app code should call `TelematicsTagsService` methods instead of these callbacks directly.
 
 Available methods:
 
@@ -287,44 +387,61 @@ Available methods:
 - `removeFutureTrackTag(_:completion:)`
 - `removeAllFutureTrackTags(completion:)`
 
-Prefer wrapping these callback APIs in Swift `async`/`await` inside `TelematicsAPIService`:
+Implement future-tag methods inside `TelematicsTagsService`:
 
 ```swift
-final class TelematicsAPIService {
-    func addFutureTrackTag(_ tag: RPFutureTag) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            RPEntry.instance.api.addFutureTrackTag(tag) { _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
+final class TelematicsTagsService {
+    /// Fetches future tags for the provided date or the SDK default scope.
+    func getFutureTrackTag(
+        _ date: Date? = nil,
+        completion: @escaping (_ status: RPTagStatus, _ tags: [RPFutureTag]) -> Void
+    ) {
+        RPEntry.instance.api.getFutureTrackTag(date, completion: completion)
     }
 
-    func removeAllFutureTrackTags() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            RPEntry.instance.api.removeAllFutureTrackTags { _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
+    /// Adds a future tag for upcoming trips.
+    func addFutureTrackTag(
+        _ tag: RPFutureTag,
+        completion: @escaping (_ status: RPTagStatus, _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.addFutureTrackTag(tag, completion: completion)
+    }
+
+    /// Removes a future tag from upcoming trips.
+    func removeFutureTrackTag(
+        _ tag: RPFutureTag,
+        completion: @escaping (_ status: RPTagStatus, _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.removeFutureTrackTag(tag, completion: completion)
+    }
+
+    /// Removes all future tags from upcoming trips.
+    func removeAllFutureTrackTags(
+        completion: @escaping (_ status: RPTagStatus, _ error: Error?) -> Void
+    ) {
+        RPEntry.instance.api.removeAllFutureTrackTags(completion: completion)
     }
 }
 ```
 
-All other `RPEntry.instance.api` methods used by the app should be added to `TelematicsAPIService` too.
-
-Callback wrapper pattern:
+`TelematicsService` may add private async helpers around `TelematicsTagsService` callbacks when tracking flow sequencing needs `try await`:
 
 ```swift
-func addFutureTrackTag(_ tag: RPFutureTag) async throws {
+private func addFutureTrackTag(_ tag: RPFutureTag) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        RPEntry.instance.api.addFutureTrackTag(tag) { _, error in
+        tagsService.addFutureTrackTag(tag) { _, error in
+            if let error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume()
+            }
+        }
+    }
+}
+
+private func removeAllFutureTrackTags() async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        tagsService.removeAllFutureTrackTags { _, error in
             if let error {
                 continuation.resume(throwing: error)
             } else {
@@ -343,14 +460,14 @@ RPEntry.instance.setEnableSdk(true)
 RPEntry.instance.setTrackingMode(.standard)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await apiService.addFutureTrackTag(tag)
+try await addFutureTrackTag(tag)
 RPEntry.instance.startTracking()
 ```
 
 For stop with tag cleanup:
 
 ```swift
-try await apiService.removeAllFutureTrackTags()
+try await removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setEnableSdk(false)
 ```
@@ -372,7 +489,7 @@ RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await apiService.addFutureTrackTag(tag)
+try await addFutureTrackTag(tag)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.setTrackingMode(.persistent)
 RPEntry.instance.startTracking()
@@ -381,7 +498,7 @@ RPEntry.instance.startTracking()
 Persistent stop with cleanup:
 
 ```swift
-try await apiService.removeAllFutureTrackTags()
+try await removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.setEnableSdk(false)

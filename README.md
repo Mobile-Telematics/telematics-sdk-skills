@@ -56,7 +56,7 @@ npx ai-agent-skills install . --agent codex
 The iOS skill helps an agent with:
 
 - Swift Package Manager setup with exact TelematicsSDK versions.
-- Service/facade architecture around `RPEntry` plus a separate `TelematicsAPIService` for `RPEntry.instance.api`.
+- Service/facade architecture around `RPEntry`, `TelematicsAPIService`, and `TelematicsTagsService`.
 - `AppDelegate` and `SceneDelegate` lifecycle forwarding.
 - Swift `async`/`await` wrappers over SDK callback APIs.
 - Automatic tracking, standard manual tracking, and persistent manual tracking flows with and without tags.

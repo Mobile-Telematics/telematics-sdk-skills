@@ -139,8 +139,6 @@ Common APIs:
 - `sendCustomHeartbeat(_:)`: send an app-defined heartbeat reason.
 - `uploadUnsentTrips()`: request upload of pending trips, buffers, and logs.
 - `getUnsentTripCount(completion:)`
-- `getUnsentBufferCount(completion:)`
-- `getUnsentLogsCount()`
 - `setAggressiveHeartbeats(_:)`
 - `isAggressiveHeartbeats()`
 - `isRTLDEnabled()`
@@ -152,6 +150,8 @@ Deprecated APIs to avoid:
 - `isRTDEnabled()`
 
 These APIs are useful for diagnostics, status surfaces, and operational screens. Do not mix their behavior with primary tracking flow selection.
+
+`TelematicsService` should expose these methods directly. Generated public facade methods must include English documentation comments.
 
 ## Accident Detection
 
@@ -169,6 +169,8 @@ Deprecated APIs to avoid:
 - `accidentDetectionSensitivity`
 
 Expose these only when the host app needs product controls for accident detection.
+
+`TelematicsService` should expose accident-detection methods when building a reusable integration facade. Generated public facade methods must include English documentation comments.
 
 ## Delegates
 
@@ -210,8 +212,6 @@ Available through `RPEntry.instance.api`:
 
 - `getTrackWithTrackToken(_:completion:)`
 - `getTracksWithOffset(_:limit:startDate:endDate:completion:)`
-- `getSharedTrack(with:completion:)`
-- `makeTrack(_:shared:completion:)`
 - `getTrackOrigins(completion:)`
 - `changeTrackOrigin(_:forTrackToken:completion:)`
 
@@ -222,7 +222,38 @@ These APIs generally require:
 - callback error handling;
 - main-thread dispatch before UI updates.
 
-Do not call these APIs directly from `TelematicsService`, screens, reducers, interactors, or view models. Put all `RPEntry.instance.api` usage behind a separate `TelematicsAPIService`.
+Do not call these APIs directly from `TelematicsService`, screens, reducers, interactors, or view models. Put track/origin `RPEntry.instance.api` usage behind `TelematicsAPIService`.
+
+`TelematicsAPIService` must implement at least:
+
+```swift
+/// Fetches a processed track by its public track token.
+func getTrackWithTrackToken(
+    _ token: String,
+    completion: @escaping (_ track: RPTrackProcessed?, _ error: Error?) -> Void
+)
+
+/// Fetches processed tracks using server pagination and an optional date range.
+func getTracksWithOffset(
+    _ offset: UInt,
+    limit: UInt,
+    startDate: Date? = nil,
+    endDate: Date? = nil,
+    completion: @escaping (_ tracks: [RPTrackProcessed], _ error: Error?) -> Void
+)
+
+/// Fetches available track origin metadata.
+func getTrackOrigins(
+    completion: @escaping (_ trackOrigins: RPTrackOrigins?, _ error: Error?) -> Void
+)
+
+/// Changes the origin metadata for a processed track.
+func changeTrackOrigin(
+    _ originCode: RPTrackOriginCode,
+    forTrackToken token: String,
+    completion: @escaping (_ code: RPStatusCodeResponse?, _ error: Error?) -> Void
+)
+```
 
 ## RPAPIEntry Tag APIs
 
@@ -241,7 +272,54 @@ Future tags:
 
 Future-tag APIs are commonly used by manual flows, but the API surface itself is common. If a future tag is required for a manually started trip, wait for the add completion before calling `startTracking()`.
 
-`TelematicsService` can depend on `TelematicsAPIService` for tag operations, but it should not call `RPEntry.instance.api` directly.
+`TelematicsTagsService` must implement at least:
+
+```swift
+/// Fetches tags attached to a processed track.
+func getTrackTags(
+    _ trackToken: String,
+    completion: @escaping (_ tags: [RPTag], _ error: Error?) -> Void
+)
+
+/// Adds tags to a processed track.
+func addTrackTags(
+    _ tags: [RPTag],
+    to trackToken: String,
+    completion: @escaping (_ tags: [RPTag], _ error: Error?) -> Void
+)
+
+/// Removes tags from a processed track.
+func removeTrackTags(
+    _ tags: [RPTag],
+    from trackToken: String,
+    completion: @escaping (_ tags: [RPTag], _ error: Error?) -> Void
+)
+
+/// Fetches future tags for the provided date or the SDK default scope.
+func getFutureTrackTag(
+    _ date: Date? = nil,
+    completion: @escaping (_ status: RPTagStatus, _ tags: [RPFutureTag]) -> Void
+)
+
+/// Adds a future tag for upcoming trips.
+func addFutureTrackTag(
+    _ tag: RPFutureTag,
+    completion: @escaping (_ status: RPTagStatus, _ error: Error?) -> Void
+)
+
+/// Removes a future tag from upcoming trips.
+func removeFutureTrackTag(
+    _ tag: RPFutureTag,
+    completion: @escaping (_ status: RPTagStatus, _ error: Error?) -> Void
+)
+
+/// Removes all future tags from upcoming trips.
+func removeAllFutureTrackTags(
+    completion: @escaping (_ status: RPTagStatus, _ error: Error?) -> Void
+)
+```
+
+`TelematicsService` can depend on `TelematicsTagsService` for tag operations, but it should not call `RPEntry.instance.api` directly.
 
 ## Callback Handling
 
@@ -249,8 +327,10 @@ Future-tag APIs are commonly used by manual flows, but the API surface itself is
 
 Recommended service policy:
 
-- wrap SDK callbacks in `async`/`await` where the app architecture allows it;
-- keep raw `RPEntry.instance.api` callbacks private to `TelematicsAPIService`;
+- preserve callback methods required by the facade contracts;
+- add async overloads only as convenience methods when the host app benefits from them;
+- keep raw track/origin callbacks private to `TelematicsAPIService`;
+- keep raw tag/future-tag callbacks private to `TelematicsTagsService`;
 - propagate errors instead of silently ignoring them;
 - dispatch to `MainActor` before updating UI;
 - preserve callback APIs only if the host app architecture explicitly requires them.
