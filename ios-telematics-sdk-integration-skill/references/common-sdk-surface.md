@@ -192,6 +192,18 @@ Expose these only when the host app needs product controls for accident detectio
 
 Keep delegates alive outside the SDK because the SDK stores them weakly. Dispatch to the main queue or main actor before updating UI.
 
+Generated reusable integrations should assign and implement these delegates in `TelematicsService`:
+
+- `trackingStateDelegate`
+- `locationDelegate`
+- `accuracyAuthorizationDelegate`
+- `lowPowerModeDelegate`
+- `rtldDelegate`
+
+Do not assign `speedLimitDelegate` unless the user explicitly asks for speed-limit behavior. It requires app-specific `speedLimit` and `timeThreshold` values.
+
+The default generated delegate implementations should only call `print(...)`. Do not add business logic, state mutation, analytics, or UI updates to delegate callbacks unless requested by the user.
+
 ## RPAPIEntry Track APIs
 
 Available through `RPEntry.instance.api`:
@@ -210,6 +222,8 @@ These APIs generally require:
 - callback error handling;
 - main-thread dispatch before UI updates.
 
+Do not call these APIs directly from `TelematicsService`, screens, reducers, interactors, or view models. Put all `RPEntry.instance.api` usage behind a separate `TelematicsAPIService`.
+
 ## RPAPIEntry Tag APIs
 
 Track tags:
@@ -227,6 +241,8 @@ Future tags:
 
 Future-tag APIs are commonly used by manual flows, but the API surface itself is common. If a future tag is required for a manually started trip, wait for the add completion before calling `startTracking()`.
 
+`TelematicsService` can depend on `TelematicsAPIService` for tag operations, but it should not call `RPEntry.instance.api` directly.
+
 ## Callback Handling
 
 `RPAPIEntry` and some `RPEntry` APIs are callback-based. Completion handlers are not guaranteed to run on the main thread.
@@ -234,7 +250,7 @@ Future-tag APIs are commonly used by manual flows, but the API surface itself is
 Recommended service policy:
 
 - wrap SDK callbacks in `async`/`await` where the app architecture allows it;
-- keep raw SDK callbacks private to the Telematics service/facade;
+- keep raw `RPEntry.instance.api` callbacks private to `TelematicsAPIService`;
 - propagate errors instead of silently ignoring them;
 - dispatch to `MainActor` before updating UI;
 - preserve callback APIs only if the host app architecture explicitly requires them.

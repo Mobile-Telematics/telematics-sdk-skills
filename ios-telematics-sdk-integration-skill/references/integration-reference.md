@@ -167,11 +167,29 @@ These are app-level flows that decide when SDK collection or a manual trip shoul
 
 When implementing a reusable Telematics service, ask which flow is primary if the user has not already specified it. Implement all supported flows, but place the primary flow first with a `// MARK: - Primary Flow: ...` section and place the rest below it as `// MARK: - Additional Flow: ...` sections.
 
-Manual tracking:
+Supported flows:
+
+- automatic tracking
+- standard manual tracking without tags
+- standard manual tracking with tags
+- persistent manual tracking without tags
+- persistent manual tracking with tags
+
+Put all `RPEntry.instance.api` calls behind a separate `TelematicsAPIService`. `TelematicsService` should call the API service for tag operations instead of accessing `RPEntry.instance.api` directly.
+
+Automatic tracking:
 
 ```swift
 RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
+```
+
+Standard manual tracking without tags:
+
+```swift
+RPEntry.instance.setDeviceID(deviceId: deviceId)
+RPEntry.instance.setEnableSdk(true)
+RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.startTracking()
 ```
 
@@ -223,29 +241,31 @@ let isTracking = RPEntry.instance.isTracking()
 Delegate:
 
 ```swift
-final class TrackingObserver: NSObject, RPTrackingStateListenerDelegate {
+final class DamoovTelematicsService: NSObject, RPTrackingStateListenerDelegate {
     func trackingStateChanged(_ state: Bool) {
-        DispatchQueue.main.async {
-            // update app state
-        }
+        print("Telematics trackingStateChanged: \(state)")
     }
 }
 ```
+
+`TelematicsService` should assign and implement `trackingStateDelegate`, `locationDelegate`, `accuracyAuthorizationDelegate`, `lowPowerModeDelegate`, and `rtldDelegate`. Generated delegate methods should only call `print(...)`; the app team can replace these bodies later. Do not assign or implement `speedLimitDelegate` unless the user explicitly requests speed-limit behavior.
 
 ## Trip Tags
 
 Track-specific tags require a public track token and network connectivity. Completion may not be on the main thread.
 
 ```swift
-let tag = RPTag(tag: "ExampleTag", source: "ExampleTagSource")
-
-RPEntry.instance.api.addTrackTags([tag], to: trackToken) { tags, error in
-    if let error {
-        // handle error
-        return
-    }
-    DispatchQueue.main.async {
-        // update UI with tags
+final class TelematicsAPIService {
+    func addTrackTags(_ tags: [RPTag], to trackToken: String) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            RPEntry.instance.api.addTrackTags(tags, to: trackToken) { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
     }
 }
 ```
@@ -258,7 +278,7 @@ Available methods:
 
 ## Future Tags
 
-Future tags are handled through `RPEntry.instance.api` and `RPFutureTag`. The SDK exposes completion-handler methods; app code should call async service methods instead of these callbacks directly.
+Future tags are handled through `RPEntry.instance.api` and `RPFutureTag`. The SDK exposes completion-handler methods; app code should call async `TelematicsAPIService` methods instead of these callbacks directly.
 
 Available methods:
 
@@ -267,10 +287,42 @@ Available methods:
 - `removeFutureTrackTag(_:completion:)`
 - `removeAllFutureTrackTags(completion:)`
 
-Prefer wrapping these callback APIs in Swift `async`/`await` inside the app-owned Telematics service:
+Prefer wrapping these callback APIs in Swift `async`/`await` inside `TelematicsAPIService`:
 
 ```swift
-private func addFutureTag(_ tag: RPFutureTag) async throws {
+final class TelematicsAPIService {
+    func addFutureTrackTag(_ tag: RPFutureTag) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            RPEntry.instance.api.addFutureTrackTag(tag) { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    func removeAllFutureTrackTags() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            RPEntry.instance.api.removeAllFutureTrackTags { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+}
+```
+
+All other `RPEntry.instance.api` methods used by the app should be added to `TelematicsAPIService` too.
+
+Callback wrapper pattern:
+
+```swift
+func addFutureTrackTag(_ tag: RPFutureTag) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         RPEntry.instance.api.addFutureTrackTag(tag) { _, error in
             if let error {
@@ -281,47 +333,46 @@ private func addFutureTag(_ tag: RPFutureTag) async throws {
         }
     }
 }
-
-private func removeAllFutureTags() async throws {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        RPEntry.instance.api.removeAllFutureTrackTags { _, error in
-            if let error {
-                continuation.resume(throwing: error)
-            } else {
-                continuation.resume()
-            }
-        }
-    }
-}
 ```
 
-For manual tracking with a required future tag, add the tag before starting:
+For standard manual tracking with tags, add future tags before starting:
 
 ```swift
 RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
+RPEntry.instance.setTrackingMode(.standard)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await addFutureTag(tag)
+try await apiService.addFutureTrackTag(tag)
 RPEntry.instance.startTracking()
 ```
 
 For stop with tag cleanup:
 
 ```swift
-try await removeAllFutureTags()
+try await apiService.removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setEnableSdk(false)
 ```
 
-Persistent manual tracking with a future tag:
+Persistent manual tracking without tags:
+
+```swift
+RPEntry.instance.setDeviceID(deviceId: deviceId)
+RPEntry.instance.setEnableSdk(true)
+try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
+RPEntry.instance.setTrackingMode(.persistent)
+RPEntry.instance.startTracking()
+```
+
+Persistent manual tracking with future tags:
 
 ```swift
 RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await addFutureTag(tag)
+try await apiService.addFutureTrackTag(tag)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.setTrackingMode(.persistent)
 RPEntry.instance.startTracking()
@@ -330,7 +381,7 @@ RPEntry.instance.startTracking()
 Persistent stop with cleanup:
 
 ```swift
-try await removeAllFutureTags()
+try await apiService.removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.setEnableSdk(false)

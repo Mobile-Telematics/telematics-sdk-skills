@@ -10,14 +10,17 @@ This is a recommendation, not a verified SDK requirement. The reason is architec
 
 Use names that match the host app conventions, but keep these responsibilities separate:
 
-- `TelematicsService`: owns all `RPEntry` calls.
+- `TelematicsService`: owns `RPEntry` lifecycle, configuration, tracking, and delegate calls, excluding `RPEntry.instance.api`.
+- `TelematicsAPIService`: owns all `RPEntry.instance.api` calls, including track, trip-tag, and future-tag APIs.
 - `TelematicsLifecycleAdapter`: centralizes `UIApplicationDelegate` / `UISceneDelegate` forwarding, but is called by standard app delegates named `AppDelegate` and `SceneDelegate`.
 - `TrackingSessionRequest`: app-level input for starting tracking, e.g. device ID, flow, optional tag, optional persistent interval.
-- `TrackingFlow`: app-level flow such as automatic enablement or manual trip start/stop.
+- `TrackingFlow`: app-level flow such as automatic enablement, standard manual start/stop, or persistent manual start/stop, with or without tags.
 - `TrackingMode`: app-level enum that maps to SDK modes `.standard` or `.persistent`.
 - `TelematicsError`: app-level error mapping for SDK/API failures.
 
 Avoid putting business decisions into `AppDelegate`. App/scene delegates should initialize and forward lifecycle only. Use standard delegate names: `AppDelegate` and `SceneDelegate`; do not create SDK-specific delegate class names such as `DamoovAppDelegate` or `DamoovSceneDelegate`.
+
+`TelematicsService` should receive a `TelematicsAPIService` dependency and must not call `RPEntry.instance.api` directly. This keeps SDK singleton/lifecycle/tracking calls separate from network-backed track/tag API wrappers.
 
 The lifecycle adapter must forward the full applicable SDK lifecycle surface:
 
@@ -40,7 +43,10 @@ protocol TelematicsServicing {
     func configure()
     func enableAutomaticTracking(deviceId: String)
     func disableSdk(keepDeviceId: Bool)
-    func startManualTracking(deviceId: String, tag: FutureTripTag?, persistent: PersistentTrackingOptions?) async throws
+    func startStandardManualTracking(deviceId: String)
+    func startStandardManualTrackingWithTags(deviceId: String, tags: [FutureTripTag]) async throws
+    func startPersistentManualTracking(deviceId: String, maxIntervalMinutes: Int) throws
+    func startPersistentManualTrackingWithTags(deviceId: String, tags: [FutureTripTag], maxIntervalMinutes: Int) async throws
     func stopManualTracking(removeFutureTags: Bool) async throws
     func isTracking() -> Bool
 }
@@ -48,26 +54,38 @@ protocol TelematicsServicing {
 
 Use `keepDeviceId: true` for `setEnableSdk(false)`. Use `keepDeviceId: false` only when logout semantics are intended.
 
+`TelematicsAPIService` should wrap every `RPEntry.instance.api` method the integration exposes. For a full reusable integration, include wrappers for the track APIs, track-tag APIs, and future-tag APIs listed in `common-sdk-surface.md`. At minimum for this skill's generated tracking flows, it must expose async wrappers for future tags:
+
+```swift
+protocol TelematicsAPIServicing {
+    func addFutureTrackTag(_ tag: RPFutureTag) async throws
+    func removeAllFutureTrackTags() async throws
+}
+```
+
+When the host app uses trip history, shared tracks, origins, or track-specific tags, add corresponding methods to this API service rather than calling `RPEntry.instance.api` from screens or `TelematicsService`.
+
 ## Primary Flow Selection
 
 Before implementing a new reusable Telematics service, identify the user's primary flow. Ask directly when it is not specified:
 
 ```text
-Which primary tracking flow should be placed first in the Telematics service: automatic tracking, manual tracking, manual tracking with required future tags, or manual tracking with persistent SDK mode?
+Which primary tracking flow should be placed first in the Telematics service: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, persistent manual tracking without tags, or persistent manual tracking with tags?
 ```
 
 The service should still include all supported flows, but the user-requested primary flow must be implemented first and marked explicitly:
 
 ```swift
-// MARK: - Primary Flow: Manual tracking with persistent SDK mode
+// MARK: - Primary Flow: Persistent manual tracking with tags
 ```
 
 Put the other supported flows below it with separate sections:
 
 ```swift
 // MARK: - Additional Flow: Automatic tracking
-// MARK: - Additional Flow: Manual tracking
-// MARK: - Additional Flow: Manual tracking with required future tags
+// MARK: - Additional Flow: Standard manual tracking without tags
+// MARK: - Additional Flow: Standard manual tracking with tags
+// MARK: - Additional Flow: Persistent manual tracking without tags
 ```
 
 Keep the primary flow first so the app team can find and customize the business-critical path quickly. Do not duplicate SDK sequencing logic unnecessarily; share private helpers for common operations such as device ID setup, SDK enablement, future-tag cleanup, and persistent-mode reset.
@@ -76,10 +94,10 @@ Keep the primary flow first so the app team can find and customize the business-
 
 Keep product flows separate from SDK modes:
 
-- App-level flows: automatic tracking enablement, manual tracking without tags, manual tracking with required future tags, and manual tracking with persistent SDK mode.
+- App-level flows: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, persistent manual tracking without tags, and persistent manual tracking with tags.
 - SDK tracking modes: `RPTrackingMode.standard` and `RPTrackingMode.persistent`, configured with `setTrackingMode`.
 
-Persistent SDK mode can be used inside a manual flow, but do not model it as a separate lifecycle flow unless the host app product requirements treat it that way.
+Standard and persistent manual flows share the same lifecycle requirements. The difference is the SDK tracking mode and whether future tags are added before `startTracking()`.
 
 ## Sequencing Rules
 
@@ -104,11 +122,12 @@ RPEntry.instance.logout()
 
 `logout()` clears the device ID. Use it only when the app truly wants the next enable flow to require setting the device ID again.
 
-Manual tracking without tags:
+Standard manual tracking without tags:
 
 ```swift
 RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
+RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.startTracking()
 ```
 
@@ -119,14 +138,15 @@ RPEntry.instance.stopTracking()
 RPEntry.instance.setEnableSdk(false)
 ```
 
-Manual tracking with required future tag. Prefer this sequence inside an async service method:
+Standard manual tracking with tags. Prefer this sequence inside an async service method:
 
 ```swift
 RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
+RPEntry.instance.setTrackingMode(.standard)
 
 let tag = RPFutureTag(tag: tagValue, source: source)
-try await addFutureTag(tag)
+try await apiService.addFutureTrackTag(tag)
 RPEntry.instance.startTracking()
 ```
 
@@ -135,21 +155,31 @@ Starting tracking before `addFutureTrackTag` completes is a race if the tag is r
 Manual stop with future-tag cleanup:
 
 ```swift
-try await removeAllFutureTags()
+try await apiService.removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setEnableSdk(false)
 ```
 
 If stopping must never be delayed by network/API cleanup, stop first and run tag cleanup as best-effort, but document that trade-off.
 
-Persistent manual tracking with tag:
+Persistent manual tracking without tags:
+
+```swift
+RPEntry.instance.setDeviceID(deviceId: deviceId)
+RPEntry.instance.setEnableSdk(true)
+try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
+RPEntry.instance.setTrackingMode(.persistent)
+RPEntry.instance.startTracking()
+```
+
+Persistent manual tracking with tags:
 
 ```swift
 RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: tagValue, source: source)
-try await addFutureTag(tag)
+try await apiService.addFutureTrackTag(tag)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.setTrackingMode(.persistent)
 RPEntry.instance.startTracking()
@@ -158,7 +188,7 @@ RPEntry.instance.startTracking()
 Persistent stop:
 
 ```swift
-try await removeAllFutureTags()
+try await apiService.removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.setEnableSdk(false)
@@ -180,38 +210,49 @@ Because `setMaxPersistentTrackingInterval(minutes:)` throws, service APIs should
 
 ## Concurrency Guidance
 
-The SDK exposes callback-based APIs, but the app service should prefer Swift `async`/`await`. Keep callback APIs private to the service wrapper so callers can express sequencing with `try await`.
+The SDK exposes callback-based APIs, but the app service should prefer Swift `async`/`await`. Keep `RPEntry.instance.api` callback APIs private to `TelematicsAPIService` so callers can express sequencing with `try await`.
 
 Recommended shape:
 
 ```swift
-@MainActor
-final class DamoovTelematicsService: TelematicsServicing {
-    // MARK: - Primary Flow: Manual tracking with persistent SDK mode
+final class DamoovTelematicsService: NSObject, TelematicsServicing {
+    private let apiService: TelematicsAPIServicing
 
-    func startManualTracking(
+    init(apiService: TelematicsAPIServicing = TelematicsAPIService()) {
+        self.apiService = apiService
+        super.init()
+    }
+
+    func configure() {
+        RPEntry.instance.trackingStateDelegate = self
+        RPEntry.instance.locationDelegate = self
+        RPEntry.instance.accuracyAuthorizationDelegate = self
+        RPEntry.instance.lowPowerModeDelegate = self
+        RPEntry.instance.rtldDelegate = self
+    }
+
+    // MARK: - Primary Flow: Persistent manual tracking with tags
+
+    func startPersistentManualTrackingWithTags(
         deviceId: String,
-        tag: FutureTripTag?,
-        persistent: PersistentTrackingOptions?
+        tags: [FutureTripTag],
+        maxIntervalMinutes: Int
     ) async throws {
         RPEntry.instance.setDeviceID(deviceId: deviceId)
         RPEntry.instance.setEnableSdk(true)
 
-        if let tag {
-            try await addFutureTag(RPFutureTag(tag: tag.value, source: tag.source))
+        for tag in tags {
+            try await apiService.addFutureTrackTag(RPFutureTag(tag: tag.value, source: tag.source))
         }
 
-        if let persistent {
-            try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: persistent.maxIntervalMinutes)
-            RPEntry.instance.setTrackingMode(.persistent)
-        }
-
+        try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: maxIntervalMinutes)
+        RPEntry.instance.setTrackingMode(.persistent)
         RPEntry.instance.startTracking()
     }
 
     func stopManualTracking(removeFutureTags: Bool) async throws {
         if removeFutureTags {
-            try await removeAllFutureTags()
+            try await apiService.removeAllFutureTrackTags()
         }
 
         RPEntry.instance.stopTracking()
@@ -226,6 +267,39 @@ final class DamoovTelematicsService: TelematicsServicing {
         RPEntry.instance.setEnableSdk(true)
     }
 
+    // MARK: - Additional Flow: Standard manual tracking without tags
+
+    func startStandardManualTracking(deviceId: String) {
+        RPEntry.instance.setDeviceID(deviceId: deviceId)
+        RPEntry.instance.setEnableSdk(true)
+        RPEntry.instance.setTrackingMode(.standard)
+        RPEntry.instance.startTracking()
+    }
+
+    // MARK: - Additional Flow: Standard manual tracking with tags
+
+    func startStandardManualTrackingWithTags(deviceId: String, tags: [FutureTripTag]) async throws {
+        RPEntry.instance.setDeviceID(deviceId: deviceId)
+        RPEntry.instance.setEnableSdk(true)
+        RPEntry.instance.setTrackingMode(.standard)
+
+        for tag in tags {
+            try await apiService.addFutureTrackTag(RPFutureTag(tag: tag.value, source: tag.source))
+        }
+
+        RPEntry.instance.startTracking()
+    }
+
+    // MARK: - Additional Flow: Persistent manual tracking without tags
+
+    func startPersistentManualTracking(deviceId: String, maxIntervalMinutes: Int) throws {
+        RPEntry.instance.setDeviceID(deviceId: deviceId)
+        RPEntry.instance.setEnableSdk(true)
+        try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: maxIntervalMinutes)
+        RPEntry.instance.setTrackingMode(.persistent)
+        RPEntry.instance.startTracking()
+    }
+
     // MARK: - Additional Flow: SDK disablement
 
     func disableSdk(keepDeviceId: Bool) {
@@ -235,13 +309,85 @@ final class DamoovTelematicsService: TelematicsServicing {
             RPEntry.instance.logout()
         }
     }
+
+    func isTracking() -> Bool {
+        RPEntry.instance.isTracking()
+    }
+}
+
+extension DamoovTelematicsService: RPTrackingStateListenerDelegate {
+    func trackingStateChanged(_ state: Bool) {
+        print("Telematics trackingStateChanged: \(state)")
+    }
+}
+
+extension DamoovTelematicsService: RPLocationDelegate {
+    func onLocationChanged(_ location: CLLocation) {
+        print("Telematics onLocationChanged: \(location)")
+    }
+
+    func onNewEvents(_ events: [RPEventPoint]) {
+        print("Telematics onNewEvents: \(events)")
+    }
+}
+
+extension DamoovTelematicsService: RPAccuracyAuthorizationDelegate {
+    func wrongAccuracyAuthorization() {
+        print("Telematics wrongAccuracyAuthorization")
+    }
+}
+
+extension DamoovTelematicsService: RPLowPowerModeDelegate {
+    func lowPowerMode(_ state: Bool) {
+        print("Telematics lowPowerMode: \(state)")
+    }
+}
+
+extension DamoovTelematicsService: RPRTLDDelegate {
+    func rtldColectedData() {
+        print("Telematics rtldColectedData")
+    }
 }
 ```
 
-Callback wrappers:
+Do not implement or assign `RPSpeedLimitDelegate` unless the user explicitly requests speed-limit behavior. It requires product-specific `speedLimit` and `timeThreshold` values.
+
+API service callback wrappers:
 
 ```swift
-private func addFutureTag(_ tag: RPFutureTag) async throws {
+final class TelematicsAPIService: TelematicsAPIServicing {
+    func addFutureTrackTag(_ tag: RPFutureTag) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            RPEntry.instance.api.addFutureTrackTag(tag) { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    func removeAllFutureTrackTags() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            RPEntry.instance.api.removeAllFutureTrackTags { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+}
+```
+
+If the app needs additional `RPEntry.instance.api` methods, add them to `TelematicsAPIService` with the same callback-to-async policy.
+
+Callback wrapper pattern:
+
+```swift
+func addFutureTrackTag(_ tag: RPFutureTag) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         RPEntry.instance.api.addFutureTrackTag(tag) { _, error in
             if let error {
@@ -252,27 +398,16 @@ private func addFutureTag(_ tag: RPFutureTag) async throws {
         }
     }
 }
-
-private func removeAllFutureTags() async throws {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        RPEntry.instance.api.removeAllFutureTrackTags { _, error in
-            if let error {
-                continuation.resume(throwing: error)
-            } else {
-                continuation.resume()
-            }
-        }
-    }
-}
 ```
 
-If the service is not `@MainActor`, call `startTracking()` and `stopTracking()` through `await MainActor.run { ... }`. Do not expose SDK callbacks to UI code unless the host app architecture explicitly requires callback APIs.
+If the service methods are not already called from the main actor, call `startTracking()` and `stopTracking()` through `await MainActor.run { ... }`. Do not expose SDK callbacks to UI code unless the host app architecture explicitly requires callback APIs.
 
 ## Architecture Checks
 
 When reviewing an integration, flag these issues:
 
 - Direct `RPEntry.instance` calls outside the service/lifecycle adapter.
+- Direct `RPEntry.instance.api` calls outside `TelematicsAPIService`.
 - Missing full lifecycle forwarding from `references/integration-reference.md`.
 - Duplicated foreground/background forwarding between SceneDelegate and AppDelegate paths.
 - Manual tracking started before required future tag completion.
