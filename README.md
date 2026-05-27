@@ -59,7 +59,7 @@ The iOS skill helps an agent with:
 - Service/facade architecture around `RPEntry`, `TelematicsAPIService`, and `TelematicsTagsService`.
 - `AppDelegate` and `SceneDelegate` lifecycle forwarding.
 - Swift `async`/`await` wrappers over SDK callback APIs.
-- Automatic tracking, standard manual tracking, and persistent manual tracking flows with and without tags.
+- Automatic tracking, standard manual tracking, app-controlled persistent manual tracking, and one-time persistent manual tracking flows with and without tags.
 - SDK tracking modes: `.standard` and `.persistent`.
 - Future tags and trip tags.
 - Migration away from deprecated `RPEntry` methods and properties.
@@ -113,11 +113,19 @@ Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into
 ```
 
 ```text
-Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this iOS app. Primary flow should be persistent manual tracking without tags.
+Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this iOS app. Primary flow should be app-controlled persistent manual tracking without tags.
 ```
 
 ```text
-Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this iOS app. Primary flow should be persistent manual tracking with tags.
+Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this iOS app. Primary flow should be app-controlled persistent manual tracking with tags.
+```
+
+```text
+Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this iOS app. Primary flow should be one-time persistent manual tracking without tags.
+```
+
+```text
+Use $ios-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this iOS app. Primary flow should be one-time persistent manual tracking with tags.
 ```
 
 ```text

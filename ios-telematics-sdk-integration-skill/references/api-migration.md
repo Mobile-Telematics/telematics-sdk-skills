@@ -6,7 +6,7 @@ The published docs may still show deprecated members until the next SDK release 
 
 | Deprecated API | Current API |
 | --- | --- |
-| `RPEntry.instance.virtualDeviceToken = value` | `RPEntry.instance.setDeviceID(deviceId: value)` |
+| `RPEntry.instance.virtualDeviceToken = value` | `try RPEntry.instance.setDeviceID(deviceId: value)` |
 | `RPEntry.instance.virtualDeviceToken` | `RPEntry.instance.getDeviceId()` |
 | `RPEntry.instance.apiLanguage = value` | `RPEntry.instance.setApiLanguage(apiLanguage: value)` |
 | `RPEntry.instance.apiLanguage` | `RPEntry.instance.getApiLanguage()` |
@@ -16,7 +16,7 @@ The published docs may still show deprecated members until the next SDK release 
 | `RPEntry.instance.disableTracking = value` | `RPEntry.instance.setDisableTracking(disableTracking: value)` |
 | `RPEntry.instance.disableTracking` | `RPEntry.instance.isDisableTracking()` |
 | `RPEntry.instance.removeVirtualDeviceToken()` | `RPEntry.instance.clearDeviceID()` |
-| `RPEntry.instance.startPersistentTracking()` | `RPEntry.instance.setTrackingMode(.persistent)` then `RPEntry.instance.startTracking()` |
+| `RPEntry.instance.startPersistentTracking()` | Use `RPEntry.instance.startTrackAsPersistent()` for one-time persistent manual tracking with automatic `.standard` reset, or `setTrackingMode(.persistent)` then `startTracking()` for app-controlled persistent mode. |
 | `RPEntry.instance.isAllRequiredPermissionsGranted()` | `RPEntry.instance.isAllRequiredPermissionsAndSensorsGranted()` |
 | `RPEntry.instance.isRTDEnabled()` | `RPEntry.instance.isRTLDEnabled()` |
 | `RPEntry.instance.isTrackingActive()` | `RPEntry.instance.isTracking()` |
@@ -26,10 +26,12 @@ The published docs may still show deprecated members until the next SDK release 
 
 ## Notes For Migration
 
-- `logout()` disables the SDK and clears the device ID. After logout, re-enable with `setEnableSdk(true)` and set a new device ID.
+- `logout()` disables the SDK and clears the device ID. After logout, re-enable with `setEnableSdk(true)` and set a new device ID with `try setDeviceID(deviceId:)`.
+- Do not add a migration item from a non-throwing `setDeviceID(deviceId:)` signature; that signature was not published.
 - `setDisableTracking(disableTracking:)` prevents new user-initiated tracking sessions but does not disable the SDK or heartbeats.
 - `setEnableSdk(false)` is the stronger switch when no SDK data should be collected.
-- `startPersistentTracking()` had implicit mode-reset behavior through `stopTracking()` when started by that old method. In the new flow, the app should explicitly restore `.standard` when required.
+- `startTrackAsPersistent()` starts a one-time persistent session. It automatically switches `trackingMode` to `.persistent`, then restores `.standard` after `stopTracking()` or when `setMaxPersistentTrackingInterval` is reached.
+- For app-controlled persistent mode, `setTrackingMode(.persistent)` plus `startTracking()` still requires the app to restore `.standard` when required.
 - The deprecation message for `wrongAccuracyState` mentions `setDisableTracking(_:)`; verify intent before treating wrong accuracy state as app-controlled. The available direct replacement for reading state is `isWrongAccuracyState()`.
 
 ## Review Checklist

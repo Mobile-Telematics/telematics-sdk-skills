@@ -92,7 +92,7 @@ The SDK source already guards missing device ID or disabled SDK state where appl
 
 Common current APIs:
 
-- `setDeviceID(deviceId:)`
+- `setDeviceID(deviceId:) throws`
 - `getDeviceId()`
 - `clearDeviceID()`
 - `logout()`
@@ -101,8 +101,21 @@ Common current APIs:
 - `setDisableTracking(disableTracking:)`
 - `isDisableTracking()`
 
+Device ID setter signature:
+
+```swift
+/**
+ Sets the device id (device ID) for the current SDK session.
+ - Use `logout()` to clear the device id (device ID) explicitly.
+ - Parameter deviceId: The unique identifier (GUID) for the virtual device. Use this to associate the device with a user or session.
+ - SeeAlso: `getDeviceId()`
+ */
+@objc public func setDeviceID(deviceId: String) throws
+```
+
 Key behavior:
 
+- `setDeviceID(deviceId:)` sets the device id (device ID) for the current SDK session. It throws, so app service APIs that assign a device ID should expose or handle that failure.
 - `setEnableSdk(false)` disables SDK collection and stops tracking-related operations, but keeps the device ID.
 - `logout()` disables the SDK and clears the device ID. Use it for logout/account removal semantics only.
 - `setDisableTracking(disableTracking:)` prevents new user-initiated tracking sessions; it is not the same as disabling the SDK.

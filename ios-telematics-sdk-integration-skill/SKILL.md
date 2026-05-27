@@ -1,6 +1,6 @@
 ---
 name: ios-telematics-sdk-integration-skill
-description: Use when designing, integrating, migrating, reviewing, or debugging Damoov TelematicsSDK for iOS apps, especially SPM setup, service-layer architecture, RPEntry lifecycle, automatic/manual tracking flows, standard/persistent SDK tracking modes, permissions, future tags, trip tags, and replacing deprecated API from current SDK source.
+description: Use when designing, integrating, migrating, reviewing, or debugging Damoov TelematicsSDK for iOS apps, especially SPM setup, service-layer architecture, RPEntry lifecycle, automatic/manual tracking flows, standard/persistent SDK tracking modes, one-time persistent manual tracking, permissions, future tags, trip tags, and replacing deprecated API from current SDK source.
 metadata:
   short-description: Damoov iOS TelematicsSDK integration
 ---
@@ -36,8 +36,10 @@ If this path does not exist, inspect the SDK version installed in the target app
    - automatic tracking
    - standard manual tracking without tags
    - standard manual tracking with tags
-   - persistent manual tracking without tags
-   - persistent manual tracking with tags
+   - app-controlled persistent manual tracking without tags
+   - app-controlled persistent manual tracking with tags
+   - one-time persistent manual tracking without tags
+   - one-time persistent manual tracking with tags
    If the user has already stated the primary flow in the request or existing product code makes it unambiguous, use that flow without asking again.
 
 7. Replace deprecated public API with current API. Load `references/api-migration.md` when touching `RPEntry` methods or properties.
@@ -65,17 +67,19 @@ If this path does not exist, inspect the SDK version installed in the target app
 - In `application(_:didFinishLaunchingWithOptions:)`, `RPEntry.initializeSDK()` must be the first executable statement and must happen before `RPEntry.instance.application(application, didFinishLaunchingWithOptions: launchOptions ?? [:])`.
 - Wire lifecycle forwarding from the app's actual `AppDelegate`, `SceneDelegate`, or SwiftUI lifecycle bridge into the Telematics lifecycle adapter/service. Do not only implement lifecycle methods inside the facade without calling them from app lifecycle entry points.
 - Lifecycle forwarding methods are mandatory. Do not guard them with `RPEntry.isInitialized`, device ID checks, `hasConfiguredDeviceId`, or similar app-side conditions; the SDK already handles missing device ID or disabled state where applicable.
-- Use `setDeviceID(deviceId:)` / `getDeviceId()` instead of `virtualDeviceToken`.
+- Use `try setDeviceID(deviceId:)` / `getDeviceId()` instead of `virtualDeviceToken`; expose or handle the thrown error instead of ignoring invalid device IDs.
 - Use method-style setters/getters introduced in `RPEntry` instead of deprecated properties.
 - Put track/origin `RPEntry.instance.api` calls inside `TelematicsAPIService`.
 - Put track-tag and future-tag `RPEntry.instance.api` calls inside `TelematicsTagsService`.
 - Do not mix network/tag/track API wrappers into `TelematicsService`.
-- Call `startTracking()` / `stopTracking()` on the main thread.
+- Call `startTracking()`, `startTrackAsPersistent()`, and `stopTracking()` on the main thread.
 - Treat automatic/manual tracking as app-level flows; treat `.standard`/`.persistent` as SDK tracking modes configured with `setTrackingMode`.
-- For persistent SDK mode, prefer `setTrackingMode(.persistent)` plus `startTracking()`; switch back with `setTrackingMode(.standard)` when business logic requires it.
+- For app-controlled persistent SDK mode, use `setTrackingMode(.persistent)` plus `startTracking()` and switch back with `setTrackingMode(.standard)` when business logic requires it.
+- For one-time persistent manual tracking, use `startTrackAsPersistent()`. The SDK switches `trackingMode` to `.persistent` at start and automatically restores `.standard` after `stopTracking()` or when `setMaxPersistentTrackingInterval` is reached; do not add a redundant manual mode reset for that flow.
+- If one service method stops all manual flows, track whether the active session was app-controlled persistent before deciding to call `setTrackingMode(.standard)`.
 - In reusable Telematics services, implement all supported flows but place the user-requested primary flow first and mark it with `// MARK: - Primary Flow: <name requested by user>`.
 - Place the remaining flows below with separate `// MARK: - Additional Flow: <flow name>` sections.
-- Supported flows are: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, persistent manual tracking without tags, and persistent manual tracking with tags.
+- Supported flows are: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, app-controlled persistent manual tracking without tags, app-controlled persistent manual tracking with tags, one-time persistent manual tracking without tags, and one-time persistent manual tracking with tags.
 - If a future tag is required for a manually started trip, add the tag and handle the completion before starting tracking; otherwise document the race.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
 - Required facade methods should preserve the SDK callback signatures unless the host app explicitly prefers async overloads. Async convenience methods may be added, but they must not replace the required callback methods.
