@@ -74,6 +74,12 @@ protocol TelematicsServicing {
     /// Returns whether SDK tracking is currently active.
     func isTracking() -> Bool
 
+    /// Returns the latest known device ID registration state.
+    func getDeviceIdRegistrationState() -> RPDeviceIdRegistrationState
+
+    /// Fetches the current automatic and manual tracking availability state.
+    func getTrackingState(completion: @escaping (_ state: RPTrackingState) -> Void)
+
     /// Sends a custom heartbeat with an app-defined reason.
     func sendCustomHeartbeat(_ reason: String)
 
@@ -501,6 +507,14 @@ final class DamoovTelematicsService: NSObject, TelematicsServicing {
 
     func isTracking() -> Bool {
         RPEntry.instance.isTracking()
+    }
+
+    func getDeviceIdRegistrationState() -> RPDeviceIdRegistrationState {
+        RPEntry.instance.getDeviceIdRegistrationState()
+    }
+
+    func getTrackingState(completion: @escaping (_ state: RPTrackingState) -> Void) {
+        RPEntry.instance.getTrackingState(completion: completion)
     }
 
     func sendCustomHeartbeat(_ reason: String) {

@@ -149,6 +149,8 @@ The app should ensure `Info.plist` contains the required usage descriptions befo
 Common APIs:
 
 - `isTracking()`: read current SDK tracking activity.
+- `getDeviceIdRegistrationState() -> RPDeviceIdRegistrationState`: read the latest known device ID registration status.
+- `getTrackingState(completion:)`: asynchronously read automatic and manual tracking availability status.
 - `sendCustomHeartbeat(_:)`: send an app-defined heartbeat reason.
 - `uploadUnsentTrips()`: request upload of pending trips, buffers, and logs.
 - `getUnsentTripCount(completion:)`
@@ -163,6 +165,20 @@ Deprecated APIs to avoid:
 - `isRTDEnabled()`
 
 These APIs are useful for diagnostics, status surfaces, and operational screens. Do not mix their behavior with primary tracking flow selection.
+
+Status API signatures:
+
+```swift
+@objc public func getDeviceIdRegistrationState() -> RPDeviceIdRegistrationState
+
+@objc public func getTrackingState(
+    completion: @escaping (_ state: RPTrackingState) -> Void
+)
+```
+
+`RPDeviceIdRegistrationState` exposes read-only `status: RPDeviceIdRegistrationStatus` and `checkedAt: TimeInterval`. `checkedAt == 0` means the registration state has not been checked yet. `RPDeviceIdRegistrationStatus` cases are `.notSet`, `.unknown`, `.registered`, and `.notRegistered`.
+
+`RPTrackingState` exposes read-only `automaticTrackingStatus: RPTrackingStatus` and `manualTrackingStatus: RPTrackingStatus`. `RPTrackingStatus` cases are `.enabled`, `.deviceIdNotSet`, `.sdkDisabled`, `.disabledBySettings`, `.disabledByServer`, and `.disabledBySchedule`.
 
 `TelematicsService` should expose these methods directly. Generated public facade methods must include English documentation comments.
 

@@ -266,6 +266,11 @@ Tracking status:
 
 ```swift
 let isTracking = RPEntry.instance.isTracking()
+let deviceIdState = RPEntry.instance.getDeviceIdRegistrationState()
+RPEntry.instance.getTrackingState { state in
+    let automaticStatus = state.automaticTrackingStatus
+    let manualStatus = state.manualTrackingStatus
+}
 ```
 
 `TelematicsService` should also expose status, diagnostics, uploads, heartbeat, RTLD, and accident-detection controls:
@@ -273,6 +278,12 @@ let isTracking = RPEntry.instance.isTracking()
 ```swift
 /// Returns whether SDK tracking is currently active.
 func isTracking() -> Bool
+
+/// Returns the latest known device ID registration state.
+func getDeviceIdRegistrationState() -> RPDeviceIdRegistrationState
+
+/// Fetches the current automatic and manual tracking availability state.
+func getTrackingState(completion: @escaping (_ state: RPTrackingState) -> Void)
 
 /// Sends a custom heartbeat with an app-defined reason.
 func sendCustomHeartbeat(_ reason: String)
