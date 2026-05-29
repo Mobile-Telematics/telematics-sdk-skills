@@ -18,6 +18,8 @@ Each skill keeps platform-specific reference material under `references/<platfor
 
 ## Install All Skills
 
+### Using `ai-agent-skills`
+
 Install every skill from this repository for Claude Code:
 
 ```bash
@@ -37,6 +39,32 @@ npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --agent clau
 npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --agent codex --dry-run
 ```
 
+### Using `skills`
+
+Install every skill from this repository for Claude Code:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill '*' --agent claude-code -y
+```
+
+Install every skill from this repository for Codex:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill '*' --agent codex -y
+```
+
+Install every skill for both Claude Code and Codex:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill '*' --agent claude-code --agent codex -y
+```
+
+List available skills without installing:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --list
+```
+
 ## Update All Skills
 
 Refresh every skill from this repository by running the install command again:
@@ -46,6 +74,18 @@ npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --agent clau
 npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --agent codex
 ```
 
+If installed with `skills`, update installed project skills:
+
+```bash
+npx skills update -y
+```
+
+Update installed global skills:
+
+```bash
+npx skills update --global -y
+```
+
 ## Manual Install
 
 From an existing local clone of this repository:
@@ -53,6 +93,13 @@ From an existing local clone of this repository:
 ```bash
 npx ai-agent-skills install . --agent claude
 npx ai-agent-skills install . --agent codex
+```
+
+Or with `skills`:
+
+```bash
+npx skills add . --skill '*' --agent claude-code -y
+npx skills add . --skill '*' --agent codex -y
 ```
 
 ## Skill Details
@@ -82,6 +129,13 @@ Install only this skill for Codex:
 npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --skill ios-telematics-sdk-integration-skill --agent codex
 ```
 
+Install only this skill with `skills`:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill ios-telematics-sdk-integration-skill --agent claude-code -y
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill ios-telematics-sdk-integration-skill --agent codex -y
+```
+
 Or install from the skill path:
 
 ```bash
@@ -94,6 +148,7 @@ Update only this skill:
 ```bash
 npx ai-agent-skills sync ios-telematics-sdk-integration-skill --agent claude
 npx ai-agent-skills sync ios-telematics-sdk-integration-skill --agent codex
+npx skills update ios-telematics-sdk-integration-skill -y
 ```
 
 Once installed, ask your coding agent to use the skill in an iOS app repository.
@@ -166,6 +221,13 @@ Install only this skill for Codex:
 npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --skill flutter-telematics-sdk-integration-skill --agent codex
 ```
 
+Install only this skill with `skills`:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill flutter-telematics-sdk-integration-skill --agent claude-code -y
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill flutter-telematics-sdk-integration-skill --agent codex -y
+```
+
 Or install from the skill path:
 
 ```bash
@@ -178,6 +240,7 @@ Update only this skill:
 ```bash
 npx ai-agent-skills sync flutter-telematics-sdk-integration-skill --agent claude
 npx ai-agent-skills sync flutter-telematics-sdk-integration-skill --agent codex
+npx skills update flutter-telematics-sdk-integration-skill -y
 ```
 
 Once installed, ask your coding agent to use the skill in a Flutter app repository.
@@ -247,6 +310,13 @@ Install only this skill for Codex:
 npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --skill react-native-telematics-sdk-integration-skill --agent codex
 ```
 
+Install only this skill with `skills`:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill react-native-telematics-sdk-integration-skill --agent claude-code -y
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill react-native-telematics-sdk-integration-skill --agent codex -y
+```
+
 Or install from the skill path:
 
 ```bash
@@ -259,6 +329,7 @@ Update only this skill:
 ```bash
 npx ai-agent-skills sync react-native-telematics-sdk-integration-skill --agent claude
 npx ai-agent-skills sync react-native-telematics-sdk-integration-skill --agent codex
+npx skills update react-native-telematics-sdk-integration-skill -y
 ```
 
 Once installed, ask your coding agent to use the skill in a React Native app repository.
