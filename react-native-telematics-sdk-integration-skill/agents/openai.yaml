@@ -1,0 +1,7 @@
+interface:
+  display_name: "React Native Telematics SDK Integration"
+  short_description: "Integrate Damoov React Native plugin"
+  default_prompt: "Use $react-native-telematics-sdk-integration-skill to integrate Damoov Telematics SDK React Native plugin into this React Native app."
+
+policy:
+  allow_implicit_invocation: true

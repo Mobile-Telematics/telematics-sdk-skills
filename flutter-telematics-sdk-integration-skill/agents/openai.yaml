@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flutter Telematics SDK Integration"
+  short_description: "Integrate Damoov Flutter plugin"
+  default_prompt: "Use $flutter-telematics-sdk-integration-skill to integrate Damoov Telematics SDK Flutter plugin into this Flutter app."
+
+policy:
+  allow_implicit_invocation: true
