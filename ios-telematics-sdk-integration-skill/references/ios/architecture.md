@@ -740,7 +740,7 @@ When reviewing an integration, flag these issues:
 - Direct `RPEntry.instance` calls outside the service/lifecycle adapter.
 - Direct track/origin `RPEntry.instance.api` calls outside `TelematicsAPIService`.
 - Direct tag/future-tag `RPEntry.instance.api` calls outside `TelematicsTagsService`.
-- Missing full lifecycle forwarding from `references/integration-reference.md`.
+- Missing full lifecycle forwarding from `references/ios/integration-reference.md`.
 - Duplicated foreground/background forwarding between SceneDelegate and AppDelegate paths.
 - Manual tracking started before required future tag completion.
 - `logout()` used when the app only meant to temporarily disable SDK collection.
@@ -748,4 +748,4 @@ When reviewing an integration, flag these issues:
 - One-time persistent flow implemented with manual `setTrackingMode(.persistent)` / `setTrackingMode(.standard)` instead of `startTrackAsPersistent()`.
 - `setMaxPersistentTrackingInterval(minutes:)` called without error handling.
 - Future-tag cleanup after `setEnableSdk(false)` when cleanup depends on SDK/API availability.
-- Deprecated API from `references/api-migration.md`.
+- Deprecated API from `references/ios/api-migration.md`.

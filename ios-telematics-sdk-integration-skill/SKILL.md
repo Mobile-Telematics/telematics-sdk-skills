@@ -30,7 +30,7 @@ If this path does not exist, inspect the SDK version installed in the target app
 
 4. Inspect current SDK API before relying on all public APIs (RPEntry, RPAPIEntry etc).
 
-5. Prefer an app-owned reusable service/facade around `RPEntry` instead of calling the SDK directly from screens or view models. Load `references/architecture.md` before designing or changing integration structure.
+5. Prefer an app-owned reusable service/facade around `RPEntry` instead of calling the SDK directly from screens or view models. Load `references/ios/architecture.md` before designing or changing integration structure.
 
 6. Before implementing a new Telematics service, ask the user which primary tracking flow should be placed first in the service:
    - automatic tracking
@@ -42,11 +42,11 @@ If this path does not exist, inspect the SDK version installed in the target app
    - one-time persistent manual tracking with tags
    If the user has already stated the primary flow in the request or existing product code makes it unambiguous, use that flow without asking again.
 
-7. Replace deprecated public API with current API. Load `references/api-migration.md` when touching `RPEntry` methods or properties.
+7. Replace deprecated public API with current API. Load `references/ios/api-migration.md` when touching `RPEntry` methods or properties.
 
-8. For public SDK APIs that are common to every integration, load `references/common-sdk-surface.md`. This includes iOS project setup, lifecycle wiring, `RPEntry` status/config/permission methods, delegates, `TelematicsAPIService`, and `TelematicsTagsService`.
+8. For public SDK APIs that are common to every integration, load `references/ios/common-sdk-surface.md`. This includes iOS project setup, lifecycle wiring, `RPEntry` status/config/permission methods, delegates, `TelematicsAPIService`, and `TelematicsTagsService`.
 
-9. For tracking flow sequences, SDK tracking modes, and tags, load `references/integration-reference.md`.
+9. For tracking flow sequences, SDK tracking modes, and tags, load `references/ios/integration-reference.md`.
 
 10. Implement separate facades for `RPEntry.instance.api`:
    - `TelematicsAPIService` for track/origin APIs.
@@ -80,6 +80,7 @@ If this path does not exist, inspect the SDK version installed in the target app
 - In reusable Telematics services, implement all supported flows but place the user-requested primary flow first and mark it with `// MARK: - Primary Flow: <name requested by user>`.
 - Place the remaining flows below with separate `// MARK: - Additional Flow: <flow name>` sections.
 - Supported flows are: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, app-controlled persistent manual tracking without tags, app-controlled persistent manual tracking with tags, one-time persistent manual tracking without tags, and one-time persistent manual tracking with tags.
+- For cross-platform manual tagged flows, treat "with tags" as future tags attached before the upcoming manually started trip. iOS also exposes processed-trip tag APIs through `TelematicsTagsService`; keep those as separate post-trip operations rather than mixing them into tracking start flows.
 - If a future tag is required for a manually started trip, add the tag and handle the completion before starting tracking; otherwise document the race.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
 - Required facade methods should preserve the SDK callback signatures unless the host app explicitly prefers async overloads. Async convenience methods may be added, but they must not replace the required callback methods.

@@ -18,6 +18,7 @@ Every integration should inspect the target app for:
 - `UIBackgroundModes`:
   - `fetch`
   - `location`
+  - `processing`
   - `remote-notification`
 - `BGTaskSchedulerPermittedIdentifiers`:
   - `sdk.damoov.apprefreshtaskid`
@@ -126,7 +127,7 @@ Deprecated APIs to avoid:
 - `removeVirtualDeviceToken()`
 - `disableTracking`
 
-Use `references/api-migration.md` for replacement details.
+Use `references/ios/api-migration.md` for replacement details.
 
 ## Permissions
 

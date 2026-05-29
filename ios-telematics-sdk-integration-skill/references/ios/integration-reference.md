@@ -37,6 +37,7 @@ Check `Info.plist` for:
 <array>
   <string>fetch</string>
   <string>location</string>
+  <string>processing</string>
   <string>remote-notification</string>
 </array>
 <key>BGTaskSchedulerPermittedIdentifiers</key>
@@ -178,6 +179,8 @@ Supported flows:
 - one-time persistent manual tracking with tags
 
 Put track/origin `RPEntry.instance.api` calls behind `TelematicsAPIService`. Put track-tag and future-tag `RPEntry.instance.api` calls behind `TelematicsTagsService`. `TelematicsService` should call the tags service for tag operations instead of accessing `RPEntry.instance.api` directly.
+
+For cross-platform manual tagged flows, "with tags" means future tags added before the upcoming manually started trip. Processed-track tag APIs are iOS SDK capabilities for already processed trips; expose them as separate post-trip operations, not as tracking start modes.
 
 Automatic tracking:
 
