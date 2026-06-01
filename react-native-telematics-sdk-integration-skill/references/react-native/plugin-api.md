@@ -199,6 +199,12 @@ Automatic tracking:
 await TelematicsSdk.setEnableSdk(true);
 ```
 
+Automatic tracking stop:
+
+```ts
+await TelematicsSdk.setEnableSdk(false);
+```
+
 Disable SDK collection while preserving device ID:
 
 ```ts
@@ -223,6 +229,13 @@ await TelematicsSdk.startManualTracking();
 
 Calling `startManualTracking()` or `startTrackAsPersistent()` while tracking is already active is idempotent: the SDK continues the existing track and does not start a new one. A facade may still check `isTracking()` to keep UI state clear.
 
+Standard manual stop without future tags:
+
+```ts
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setEnableSdk(false);
+```
+
 Standard manual tracking with future tags:
 
 ```ts
@@ -232,6 +245,14 @@ await TelematicsSdk.addFutureTrackTag(tag, source);
 await TelematicsSdk.startManualTracking();
 ```
 
+Standard manual stop with future-tag cleanup:
+
+```ts
+await TelematicsSdk.removeAllFutureTrackTags();
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setEnableSdk(false);
+```
+
 App-controlled persistent manual tracking:
 
 ```ts
@@ -239,6 +260,14 @@ await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.setTrackingMode(TrackingMode.Persistent);
 await TelematicsSdk.startManualTracking();
+```
+
+App-controlled persistent stop without future tags:
+
+```ts
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
+await TelematicsSdk.setEnableSdk(false);
 ```
 
 App-controlled persistent manual tracking with future tags:
@@ -251,7 +280,7 @@ await TelematicsSdk.addFutureTrackTag(tag, source);
 await TelematicsSdk.startManualTracking();
 ```
 
-When the app ends tagged app-controlled persistent mode in a manual-only product flow:
+App-controlled persistent stop with future-tag cleanup:
 
 ```ts
 await TelematicsSdk.removeAllFutureTrackTags();
@@ -260,13 +289,7 @@ await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.setEnableSdk(false);
 ```
 
-When the app ends app-controlled persistent mode in a manual-only product flow:
-
-```ts
-await TelematicsSdk.stopManualTracking();
-await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
-await TelematicsSdk.setEnableSdk(false);
-```
+Always restore `TrackingMode.Standard` after app-controlled persistent flows unless the product explicitly wants future automatic sessions to remain persistent.
 
 One-time persistent manual tracking:
 
@@ -274,6 +297,13 @@ One-time persistent manual tracking:
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.startTrackAsPersistent();
+```
+
+One-time persistent stop without future tags:
+
+```ts
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setEnableSdk(false);
 ```
 
 One-time persistent manual tracking with future tags:
@@ -285,20 +315,15 @@ await TelematicsSdk.addFutureTrackTag(tag, source);
 await TelematicsSdk.startTrackAsPersistent();
 ```
 
-Stop a manual-only tracking flow:
-
-```ts
-await TelematicsSdk.stopManualTracking();
-await TelematicsSdk.setEnableSdk(false);
-```
-
-Stop a tagged manual-only tracking flow when future-tag cleanup is required:
+One-time persistent stop with future-tag cleanup:
 
 ```ts
 await TelematicsSdk.removeAllFutureTrackTags();
 await TelematicsSdk.stopManualTracking();
 await TelematicsSdk.setEnableSdk(false);
 ```
+
+Do not call `setTrackingMode(TrackingMode.Persistent)` before `startTrackAsPersistent()`, and do not manually restore `TrackingMode.Standard` after stopping a one-time persistent session unless the installed native API proves the bridge does not follow native SDK behavior.
 
 If the app intentionally combines manual trips with automatic tracking, keep the SDK enabled after `stopManualTracking()` and document that product behavior in the facade.
 
@@ -338,13 +363,32 @@ export type TelematicsFlow =
   | 'oneTimePersistentManualWithFutureTag';
 ```
 
+Recommended facade method pairs:
+
+```ts
+enableAutomaticTracking(): Promise<void>;
+disableAutomaticTracking(): Promise<void>;
+startStandardManualTracking(): Promise<void>;
+stopStandardManualTracking(): Promise<void>;
+startStandardManualTrackingWithFutureTag(tag: string, source?: string): Promise<void>;
+stopStandardManualTrackingWithFutureTag(): Promise<void>;
+startPersistentManualTracking(minutes: number): Promise<void>;
+stopPersistentManualTracking(): Promise<void>;
+startPersistentManualTrackingWithFutureTag(tag: string, source: string | undefined, minutes: number): Promise<void>;
+stopPersistentManualTrackingWithFutureTag(): Promise<void>;
+startOneTimePersistentManualTracking(minutes: number): Promise<void>;
+stopOneTimePersistentManualTracking(): Promise<void>;
+startOneTimePersistentManualTrackingWithFutureTag(tag: string, source: string | undefined, minutes: number): Promise<void>;
+stopOneTimePersistentManualTrackingWithFutureTag(): Promise<void>;
+```
+
 The service should:
 
 - Ensure `initializeSdk()` runs once at app startup, before the facade accepts tracking commands.
 - Expose a separate identity method that validates and sets a non-empty device ID.
 - Expose `logout()` separately for user logout/account-removal semantics.
 - Check permissions before enable/start flows.
-- Own whether the current session is app-controlled persistent.
+- Expose flow-specific stop methods instead of one shared manual stop that infers the current mode from hidden state.
 - Sequence future tag calls before manual starts.
 - Convert promise rejections into app-facing errors.
 - Keep platform-specific controls behind `Platform.OS` checks.

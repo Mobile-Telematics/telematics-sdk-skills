@@ -172,6 +172,12 @@ Automatic tracking:
 await trackingApi.setEnableSdk(enable: true);
 ```
 
+Automatic tracking stop:
+
+```dart
+await trackingApi.setEnableSdk(enable: false);
+```
+
 Disable SDK collection while preserving device ID:
 
 ```dart
@@ -196,6 +202,13 @@ await trackingApi.startManualTracking();
 
 Calling `startManualTracking()` or `startTrackAsPersistent()` while tracking is already active is idempotent: the SDK continues the existing track and does not start a new one. A facade may still check `isTracking()` to keep UI state clear.
 
+Standard manual stop without future tags:
+
+```dart
+await trackingApi.stopManualTracking();
+await trackingApi.setEnableSdk(enable: false);
+```
+
 Standard manual tracking with future tags:
 
 ```dart
@@ -205,6 +218,14 @@ await addFutureTrackTag(tag: tag, source: source);
 await trackingApi.startManualTracking();
 ```
 
+Standard manual stop with future-tag cleanup:
+
+```dart
+await trackingApi.removeAllFutureTrackTags();
+await trackingApi.stopManualTracking();
+await trackingApi.setEnableSdk(enable: false);
+```
+
 App-controlled persistent manual tracking:
 
 ```dart
@@ -212,6 +233,14 @@ await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setMaxPersistentTrackingInterval(minutes: minutes);
 await trackingApi.setTrackingMode(trackingMode: TrackingMode.persistent);
 await trackingApi.startManualTracking();
+```
+
+App-controlled persistent stop without future tags:
+
+```dart
+await trackingApi.stopManualTracking();
+await trackingApi.setTrackingMode(trackingMode: TrackingMode.standard);
+await trackingApi.setEnableSdk(enable: false);
 ```
 
 App-controlled persistent manual tracking with future tags:
@@ -224,7 +253,7 @@ await addFutureTrackTag(tag: tag, source: source);
 await trackingApi.startManualTracking();
 ```
 
-When the app ends tagged app-controlled persistent mode in a manual-only product flow:
+App-controlled persistent stop with future-tag cleanup:
 
 ```dart
 await trackingApi.removeAllFutureTrackTags();
@@ -233,13 +262,7 @@ await trackingApi.setTrackingMode(trackingMode: TrackingMode.standard);
 await trackingApi.setEnableSdk(enable: false);
 ```
 
-When the app ends app-controlled persistent mode in a manual-only product flow:
-
-```dart
-await trackingApi.stopManualTracking();
-await trackingApi.setTrackingMode(trackingMode: TrackingMode.standard);
-await trackingApi.setEnableSdk(enable: false);
-```
+Always restore `TrackingMode.standard` after app-controlled persistent flows unless the product explicitly wants future automatic sessions to remain persistent.
 
 One-time persistent manual tracking:
 
@@ -247,6 +270,13 @@ One-time persistent manual tracking:
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setMaxPersistentTrackingInterval(minutes: minutes);
 await trackingApi.startTrackAsPersistent();
+```
+
+One-time persistent stop without future tags:
+
+```dart
+await trackingApi.stopManualTracking();
+await trackingApi.setEnableSdk(enable: false);
 ```
 
 One-time persistent manual tracking with future tags:
@@ -258,20 +288,15 @@ await addFutureTrackTag(tag: tag, source: source);
 await trackingApi.startTrackAsPersistent();
 ```
 
-Stop a manual-only tracking flow:
-
-```dart
-await trackingApi.stopManualTracking();
-await trackingApi.setEnableSdk(enable: false);
-```
-
-Stop a tagged manual-only tracking flow when future-tag cleanup is required:
+One-time persistent stop with future-tag cleanup:
 
 ```dart
 await trackingApi.removeAllFutureTrackTags();
 await trackingApi.stopManualTracking();
 await trackingApi.setEnableSdk(enable: false);
 ```
+
+Do not call `setTrackingMode(trackingMode: TrackingMode.persistent)` before `startTrackAsPersistent()`, and do not manually restore `TrackingMode.standard` after stopping a one-time persistent session unless the installed native API proves the bridge does not follow native SDK behavior.
 
 If the app intentionally combines manual trips with automatic tracking, keep the SDK enabled after `stopManualTracking()` and document that product behavior in the facade.
 
@@ -361,12 +386,31 @@ enum TelematicsFlow {
 }
 ```
 
+Recommended facade method pairs:
+
+```dart
+Future<void> enableAutomaticTracking();
+Future<void> disableAutomaticTracking();
+Future<void> startStandardManualTracking();
+Future<void> stopStandardManualTracking();
+Future<void> startStandardManualTrackingWithFutureTag({required String tag, required String source});
+Future<void> stopStandardManualTrackingWithFutureTag();
+Future<void> startPersistentManualTracking({required int minutes});
+Future<void> stopPersistentManualTracking();
+Future<void> startPersistentManualTrackingWithFutureTag({required String tag, required String source, required int minutes});
+Future<void> stopPersistentManualTrackingWithFutureTag();
+Future<void> startOneTimePersistentManualTracking({required int minutes});
+Future<void> stopOneTimePersistentManualTracking();
+Future<void> startOneTimePersistentManualTrackingWithFutureTag({required String tag, required String source, required int minutes});
+Future<void> stopOneTimePersistentManualTrackingWithFutureTag();
+```
+
 The service should:
 
 - Expose a separate identity method that validates and sets a non-empty device ID.
 - Expose `logout()` separately for user logout/account-removal semantics.
 - Check permissions before enable/start flows.
-- Own whether the current session is app-controlled persistent.
+- Expose flow-specific stop methods instead of one shared manual stop that infers the current mode from hidden state.
 - Sequence future tag calls before manual starts.
 - Convert `PlatformException` and `UnsupportedError` into app-facing errors.
 - Keep platform-specific controls behind platform checks.

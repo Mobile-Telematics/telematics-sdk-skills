@@ -76,7 +76,7 @@ The reference plugin source used to build this skill is the public repository [M
 - For app-controlled persistent manual tracking, set `TrackingMode.Persistent`, start manual tracking, and restore `TrackingMode.Standard` when business logic ends persistent mode.
 - For one-time persistent manual tracking, use `startTrackAsPersistent()` and do not add a redundant manual `setTrackingMode(TrackingMode.Standard)` reset unless the installed native API proves it does not restore automatically on that platform.
 - For manual-only product flows, stop manual tracking and then disable the SDK with `setEnableSdk(false)`. Keep the SDK enabled after manual stop only when the product intentionally combines manual trips with automatic tracking.
-- If one service method stops all manual flows, track whether the active session was app-controlled persistent before deciding to restore `TrackingMode.Standard`.
+- Expose a relevant stop method for every supported flow: automatic disables SDK collection, standard manual stops tracking and disables SDK collection, tagged manual flows remove future tags before stopping, app-controlled persistent flows also restore `TrackingMode.Standard`, and one-time persistent flows do not manually restore `TrackingMode.Standard`.
 - Starting tracking while tracking is already active is idempotent: the SDK continues recording the existing track and does not start a new one.
 - Add future tags before starting a manually tagged trip; await the promise result before starting tracking where product correctness depends on tags being attached to the upcoming trip.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
