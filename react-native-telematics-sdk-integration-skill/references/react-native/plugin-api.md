@@ -58,6 +58,8 @@ import TelematicsSdk, {
 
 The package supports React Native New Architecture through a TurboModule and falls back to the legacy native module. If the module is missing, the JS wrapper throws an error that usually means pods/Gradle sync and a native rebuild are required.
 
+No app-side credentials are passed to the React Native plugin. The SDK setup described by this skill does not require API keys in JS, `Info.plist`, or `AndroidManifest.xml`.
+
 ## Common Methods
 
 - `initializeSdk(): Promise<void>`
@@ -87,6 +89,12 @@ The package supports React Native New Architecture through a TurboModule and fal
 - `enableAccidents(enable: boolean): Promise<void>`
 - `isEnabledAccidents(): Promise<boolean>`
 - `isRTLDEnabled(): Promise<boolean>`
+
+Accident detection naming:
+
+- The verified RN plugin still exposes `enableAccidents(...)` and `isEnabledAccidents()`.
+- Native iOS/Android SDK implementations use the newer names `setAccidentDetectionEnabled(...)` and `isAccidentDetectionEnabled()`.
+- Do not generate calls to the new RN names until the installed plugin source exposes them. When updating the plugin itself, add the new names and mark the old RN methods deprecated.
 
 Enums:
 
@@ -165,20 +173,36 @@ Supported app-level flows:
 - one-time persistent manual tracking without future tags
 - one-time persistent manual tracking with future tags
 
-Initialize once before JS-side API usage:
+Initialize once during app startup before JS-side API usage:
 
 ```ts
 await TelematicsSdk.initializeSdk();
 ```
 
-On iOS, this JS call does not replace native launch initialization. `AppDelegate` still must call `RPEntry.initializeSDK()`.
+Do not call `initializeSdk()` from each tracking start method. On iOS, this JS call does not replace native launch initialization. `AppDelegate` still must call `RPEntry.initializeSDK()`.
+
+The iOS implementation may be a no-op, but the method must still exist for the React Native bridge and TurboModule/codegen surface to stay consistent across platforms. Call it once from JS app startup before the facade accepts tracking commands.
+
+Device identity setup:
+
+```ts
+await TelematicsSdk.setDeviceId(deviceId);
+```
+
+Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
+
+The device ID is a Damoov platform user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov value.
 
 Automatic tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
+```
+
+Automatic tracking stop:
+
+```ts
+await TelematicsSdk.setEnableSdk(false);
 ```
 
 Disable SDK collection while preserving device ID:
@@ -198,40 +222,57 @@ await TelematicsSdk.logout();
 Standard manual tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.startManualTracking();
+```
+
+Calling `startManualTracking()` or `startTrackAsPersistent()` while tracking is already active is idempotent: the SDK continues the existing track and does not start a new one. A facade may still check `isTracking()` to keep UI state clear.
+
+Standard manual stop without future tags:
+
+```ts
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setEnableSdk(false);
 ```
 
 Standard manual tracking with future tags:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.addFutureTrackTag(tag, source);
 await TelematicsSdk.startManualTracking();
+```
+
+Standard manual stop with future-tag cleanup:
+
+```ts
+await TelematicsSdk.removeAllFutureTrackTags();
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setEnableSdk(false);
 ```
 
 App-controlled persistent manual tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.setTrackingMode(TrackingMode.Persistent);
 await TelematicsSdk.startManualTracking();
+```
+
+App-controlled persistent stop without future tags:
+
+```ts
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
+await TelematicsSdk.setEnableSdk(false);
 ```
 
 App-controlled persistent manual tracking with future tags:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.setTrackingMode(TrackingMode.Persistent);
@@ -239,7 +280,7 @@ await TelematicsSdk.addFutureTrackTag(tag, source);
 await TelematicsSdk.startManualTracking();
 ```
 
-When the app ends tagged app-controlled persistent mode in a manual-only product flow:
+App-controlled persistent stop with future-tag cleanup:
 
 ```ts
 await TelematicsSdk.removeAllFutureTrackTags();
@@ -248,49 +289,41 @@ await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.setEnableSdk(false);
 ```
 
-When the app ends app-controlled persistent mode in a manual-only product flow:
-
-```ts
-await TelematicsSdk.stopManualTracking();
-await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
-await TelematicsSdk.setEnableSdk(false);
-```
+Always restore `TrackingMode.Standard` after app-controlled persistent flows unless the product explicitly wants future automatic sessions to remain persistent.
 
 One-time persistent manual tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.startTrackAsPersistent();
 ```
 
+One-time persistent stop without future tags:
+
+```ts
+await TelematicsSdk.stopManualTracking();
+await TelematicsSdk.setEnableSdk(false);
+```
+
 One-time persistent manual tracking with future tags:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.addFutureTrackTag(tag, source);
 await TelematicsSdk.startTrackAsPersistent();
 ```
 
-Stop a manual-only tracking flow:
-
-```ts
-await TelematicsSdk.stopManualTracking();
-await TelematicsSdk.setEnableSdk(false);
-```
-
-Stop a tagged manual-only tracking flow when future-tag cleanup is required:
+One-time persistent stop with future-tag cleanup:
 
 ```ts
 await TelematicsSdk.removeAllFutureTrackTags();
 await TelematicsSdk.stopManualTracking();
 await TelematicsSdk.setEnableSdk(false);
 ```
+
+Do not call `setTrackingMode(TrackingMode.Persistent)` before `startTrackAsPersistent()`, and do not manually restore `TrackingMode.Standard` after stopping a one-time persistent session unless the installed native API proves the bridge does not follow native SDK behavior.
 
 If the app intentionally combines manual trips with automatic tracking, keep the SDK enabled after `stopManualTracking()` and document that product behavior in the facade.
 
@@ -301,6 +334,8 @@ Future tag operations are promise-based in the React Native wrapper:
 ```ts
 const result = await TelematicsSdk.addFutureTrackTag('business', 'trip_form');
 ```
+
+`tag` and `source` are product-defined strings. The SDK does not define an enum or SDK-side value restrictions. Use `tag` for the business label and `source` for the app module or user action that created it.
 
 Available methods:
 
@@ -328,12 +363,36 @@ export type TelematicsFlow =
   | 'oneTimePersistentManualWithFutureTag';
 ```
 
+Recommended facade method pairs:
+
+```ts
+enableAutomaticTracking(): Promise<void>;
+disableAutomaticTracking(): Promise<void>;
+startStandardManualTracking(): Promise<void>;
+stopStandardManualTracking(): Promise<void>;
+startStandardManualTrackingWithFutureTag(tag: string, source?: string): Promise<void>;
+stopStandardManualTrackingWithFutureTag(): Promise<void>;
+startPersistentManualTracking(minutes: number): Promise<void>;
+stopPersistentManualTracking(): Promise<void>;
+startPersistentManualTrackingWithFutureTag(tag: string, source: string | undefined, minutes: number): Promise<void>;
+stopPersistentManualTrackingWithFutureTag(): Promise<void>;
+startOneTimePersistentManualTracking(minutes: number): Promise<void>;
+stopOneTimePersistentManualTracking(): Promise<void>;
+startOneTimePersistentManualTrackingWithFutureTag(tag: string, source: string | undefined, minutes: number): Promise<void>;
+stopOneTimePersistentManualTrackingWithFutureTag(): Promise<void>;
+```
+
 The service should:
 
-- Ensure `initializeSdk()` has run.
-- Validate non-empty device ID.
+- Ensure `initializeSdk()` runs once at app startup, before the facade accepts tracking commands.
+- Expose a separate identity method that validates and sets a non-empty device ID.
+- Expose `logout()` separately for user logout/account-removal semantics.
 - Check permissions before enable/start flows.
-- Own whether the current session is app-controlled persistent.
+- Expose flow-specific stop methods instead of one shared manual stop that infers the current mode from hidden state.
 - Sequence future tag calls before manual starts.
 - Convert promise rejections into app-facing errors.
 - Keep platform-specific controls behind `Platform.OS` checks.
+
+## Testing Notes
+
+iOS Simulator and Android Emulator can be used to exercise integration flow, permissions, simulated location, and trip recording. HF Data cannot be fully tested on emulators because accelerometer and gyroscope sensor data are not available like on a physical device. Use emulator/simulator location routes for flow checks, and run final background and sensor-heavy validation on real devices.

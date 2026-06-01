@@ -63,17 +63,21 @@ The reference plugin source used to build this skill is the public repository [M
 
 ## Coding Rules
 
-- Call `TelematicsSdk.initializeSdk()` once before other plugin APIs. On iOS it resolves without initializing native SDK itself, so host `AppDelegate` still must call `RPEntry.initializeSDK()`.
+- Call `TelematicsSdk.initializeSdk()` exactly once during app startup before other plugin APIs. Do not call it again from each tracking start method. On iOS it resolves without initializing native SDK itself, so host `AppDelegate` still must call `RPEntry.initializeSDK()`.
 - Keep one app-owned ownership point for plugin calls. Avoid direct calls from many screens unless the app architecture already has a deliberate feature boundary.
 - Add listeners in lifecycle-owned code and always call `.remove()` during cleanup.
-- Set device ID before enabling SDK or starting manual tracking.
+- Keep device identity separate from tracking flows and SDK tracking modes. Generated facades should expose an explicit `setDeviceId(...)` method for login/session binding and an explicit `logout()` method for user logout/account removal. Do not make start/stop tracking methods accept or reset the device ID.
+- Treat the device ID as a Damoov-issued user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov platform value.
+- Do not add API-key or credentials setup to app code; the React Native plugin APIs used by this skill do not take credentials.
+- Set device ID before enabling SDK or starting manual tracking, but do it through the separate identity method rather than inside each tracking flow method.
 - Check `isAllRequiredPermissionsAndSensorsGranted()` before enable/start flows; use `showPermissionWizard(...)` when the product wants native permission onboarding.
-- For automatic tracking, call `initializeSdk()`, `setDeviceId(...)`, then `setEnableSdk(true)`.
-- For standard manual tracking, ensure device ID, permissions, SDK enabled, `setTrackingMode(TrackingMode.Standard)`, then `startManualTracking()`.
+- For automatic tracking, assume `initializeSdk()` and device ID setup already happened and call `setEnableSdk(true)`.
+- For standard manual tracking, ensure the device ID has already been configured, verify permissions, enable SDK collection, call `setTrackingMode(TrackingMode.Standard)`, then `startManualTracking()`.
 - For app-controlled persistent manual tracking, set `TrackingMode.Persistent`, start manual tracking, and restore `TrackingMode.Standard` when business logic ends persistent mode.
 - For one-time persistent manual tracking, use `startTrackAsPersistent()` and do not add a redundant manual `setTrackingMode(TrackingMode.Standard)` reset unless the installed native API proves it does not restore automatically on that platform.
 - For manual-only product flows, stop manual tracking and then disable the SDK with `setEnableSdk(false)`. Keep the SDK enabled after manual stop only when the product intentionally combines manual trips with automatic tracking.
-- If one service method stops all manual flows, track whether the active session was app-controlled persistent before deciding to restore `TrackingMode.Standard`.
+- Expose a relevant stop method for every supported flow: automatic disables SDK collection, standard manual stops tracking and disables SDK collection, tagged manual flows remove future tags before stopping, app-controlled persistent flows also restore `TrackingMode.Standard`, and one-time persistent flows do not manually restore `TrackingMode.Standard`.
+- Starting tracking while tracking is already active is idempotent: the SDK continues recording the existing track and does not start a new one.
 - Add future tags before starting a manually tagged trip; await the promise result before starting tracking where product correctness depends on tags being attached to the upcoming trip.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
 - Treat tagged manual flows as future-tag flows for upcoming trips. Do not imply processed-trip tag editing unless the latest installed plugin exposes that API.
