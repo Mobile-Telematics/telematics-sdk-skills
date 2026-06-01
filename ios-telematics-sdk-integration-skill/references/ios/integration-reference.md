@@ -141,10 +141,17 @@ func applicationDidEnterBackground(_ application: UIApplication) {
 
 If the app uses `SceneDelegate`, put foreground/background/active forwarding in `SceneDelegate`. If it does not use scenes, put those methods in `AppDelegate`.
 
-Automatic tracking enablement:
+Device identity setup:
 
 ```swift
 try RPEntry.instance.setDeviceID(deviceId: deviceId)
+```
+
+Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
+
+Automatic tracking enablement:
+
+```swift
 RPEntry.instance.setEnableSdk(true)
 ```
 
@@ -185,14 +192,12 @@ For cross-platform manual tagged flows, "with tags" means future tags added befo
 Automatic tracking:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 ```
 
 Standard manual tracking without tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.startTracking()
@@ -220,7 +225,6 @@ Persistent mode is often used by manual app flows, but it is a mode, not a separ
 App-controlled persistent mode start:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 do {
     try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
@@ -243,7 +247,6 @@ RPEntry.instance.setEnableSdk(false)
 One-time persistent manual start:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 do {
     try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
@@ -499,7 +502,6 @@ private func removeAllFutureTrackTags() async throws {
 For standard manual tracking with tags, add future tags before starting:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 RPEntry.instance.setTrackingMode(.standard)
 
@@ -519,7 +521,6 @@ RPEntry.instance.setEnableSdk(false)
 App-controlled persistent manual tracking without tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.setTrackingMode(.persistent)
@@ -529,7 +530,6 @@ RPEntry.instance.startTracking()
 App-controlled persistent manual tracking with future tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
@@ -551,7 +551,6 @@ RPEntry.instance.setEnableSdk(false)
 One-time persistent manual tracking without tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.startTrackAsPersistent()
@@ -560,7 +559,6 @@ RPEntry.instance.startTrackAsPersistent()
 One-time persistent manual tracking with future tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")

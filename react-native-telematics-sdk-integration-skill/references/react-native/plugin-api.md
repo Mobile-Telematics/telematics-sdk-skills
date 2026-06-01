@@ -165,19 +165,25 @@ Supported app-level flows:
 - one-time persistent manual tracking without future tags
 - one-time persistent manual tracking with future tags
 
-Initialize once before JS-side API usage:
+Initialize once during app startup before JS-side API usage:
 
 ```ts
 await TelematicsSdk.initializeSdk();
 ```
 
-On iOS, this JS call does not replace native launch initialization. `AppDelegate` still must call `RPEntry.initializeSDK()`.
+Do not call `initializeSdk()` from each tracking start method. On iOS, this JS call does not replace native launch initialization. `AppDelegate` still must call `RPEntry.initializeSDK()`.
+
+Device identity setup:
+
+```ts
+await TelematicsSdk.setDeviceId(deviceId);
+```
+
+Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
 
 Automatic tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 ```
 
@@ -198,8 +204,6 @@ await TelematicsSdk.logout();
 Standard manual tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.startManualTracking();
@@ -208,8 +212,6 @@ await TelematicsSdk.startManualTracking();
 Standard manual tracking with future tags:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.addFutureTrackTag(tag, source);
@@ -219,8 +221,6 @@ await TelematicsSdk.startManualTracking();
 App-controlled persistent manual tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.setTrackingMode(TrackingMode.Persistent);
@@ -230,8 +230,6 @@ await TelematicsSdk.startManualTracking();
 App-controlled persistent manual tracking with future tags:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.setTrackingMode(TrackingMode.Persistent);
@@ -259,8 +257,6 @@ await TelematicsSdk.setEnableSdk(false);
 One-time persistent manual tracking:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.startTrackAsPersistent();
@@ -269,8 +265,6 @@ await TelematicsSdk.startTrackAsPersistent();
 One-time persistent manual tracking with future tags:
 
 ```ts
-await TelematicsSdk.initializeSdk();
-await TelematicsSdk.setDeviceId(deviceId);
 await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setMaxPersistentTrackingInterval(minutes);
 await TelematicsSdk.addFutureTrackTag(tag, source);
@@ -330,8 +324,9 @@ export type TelematicsFlow =
 
 The service should:
 
-- Ensure `initializeSdk()` has run.
-- Validate non-empty device ID.
+- Ensure `initializeSdk()` runs once at app startup, before the facade accepts tracking commands.
+- Expose a separate identity method that validates and sets a non-empty device ID.
+- Expose `logout()` separately for user logout/account-removal semantics.
 - Check permissions before enable/start flows.
 - Own whether the current session is app-controlled persistent.
 - Sequence future tag calls before manual starts.

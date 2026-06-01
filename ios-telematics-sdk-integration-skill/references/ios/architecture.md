@@ -14,7 +14,7 @@ Use names that match the host app conventions, but keep these responsibilities s
 - `TelematicsAPIService`: owns track/origin methods from `RPEntry.instance.api`.
 - `TelematicsTagsService`: owns track-tag and future-tag methods from `RPEntry.instance.api`.
 - `TelematicsLifecycleAdapter`: centralizes `UIApplicationDelegate` / `UISceneDelegate` forwarding, but is called by standard app delegates named `AppDelegate` and `SceneDelegate`.
-- `TrackingSessionRequest`: app-level input for starting tracking, e.g. device ID, flow, optional tag, optional persistent interval.
+- `TrackingSessionRequest`: app-level input for starting tracking, e.g. flow, optional tag, optional persistent interval. Device identity is configured separately from tracking start/stop flows.
 - `TrackingFlow`: app-level flow such as automatic enablement, standard manual start/stop, app-controlled persistent manual start/stop, or one-time persistent manual start/stop, with or without tags.
 - `TrackingMode`: app-level enum that maps to SDK modes `.standard` or `.persistent`.
 - `TelematicsError`: app-level error mapping for SDK/API failures.
@@ -44,29 +44,35 @@ protocol TelematicsServicing {
     /// Assigns SDK delegates owned by the service.
     func configure()
 
-    /// Enables automatic SDK tracking for the provided device ID.
-    func enableAutomaticTracking(deviceId: String) throws
+    /// Sets or replaces the SDK device ID for the current logged-in user/session.
+    func setDeviceId(_ deviceId: String) throws
 
-    /// Disables SDK collection while optionally preserving the device ID.
-    func disableSdk(keepDeviceId: Bool)
+    /// Clears SDK identity for user logout/account removal.
+    func logout()
+
+    /// Enables automatic SDK tracking. Requires a device ID to have been configured separately.
+    func enableAutomaticTracking() throws
+
+    /// Disables SDK collection while preserving the device ID.
+    func disableSdk()
 
     /// Starts a standard manual tracking session without future tags.
-    func startStandardManualTracking(deviceId: String) throws
+    func startStandardManualTracking() throws
 
     /// Adds future tags and starts a standard manual tracking session.
-    func startStandardManualTrackingWithTags(deviceId: String, tags: [FutureTripTag]) async throws
+    func startStandardManualTrackingWithTags(tags: [FutureTripTag]) async throws
 
     /// Starts an app-controlled persistent manual tracking session without future tags.
-    func startPersistentManualTracking(deviceId: String, maxIntervalMinutes: Int) throws
+    func startPersistentManualTracking(maxIntervalMinutes: Int) throws
 
     /// Adds future tags and starts an app-controlled persistent manual tracking session.
-    func startPersistentManualTrackingWithTags(deviceId: String, tags: [FutureTripTag], maxIntervalMinutes: Int) async throws
+    func startPersistentManualTrackingWithTags(tags: [FutureTripTag], maxIntervalMinutes: Int) async throws
 
     /// Starts a one-time persistent manual tracking session without future tags.
-    func startOneTimePersistentManualTracking(deviceId: String, maxIntervalMinutes: Int) throws
+    func startOneTimePersistentManualTracking(maxIntervalMinutes: Int) throws
 
     /// Adds future tags and starts a one-time persistent manual tracking session.
-    func startOneTimePersistentManualTrackingWithTags(deviceId: String, tags: [FutureTripTag], maxIntervalMinutes: Int) async throws
+    func startOneTimePersistentManualTrackingWithTags(tags: [FutureTripTag], maxIntervalMinutes: Int) async throws
 
     /// Stops manual tracking and optionally removes future tags first.
     func stopManualTracking(removeFutureTags: Bool) async throws
@@ -112,7 +118,7 @@ protocol TelematicsServicing {
 }
 ```
 
-Use `keepDeviceId: true` for `setEnableSdk(false)`. Use `keepDeviceId: false` only when logout semantics are intended.
+Do not model temporary SDK disablement with a `keepDeviceId` parameter. Use `disableSdk()` for `setEnableSdk(false)` and `logout()` only for real logout/account-removal semantics.
 
 `TelematicsAPIService` should wrap track/origin methods from `RPEntry.instance.api`:
 
@@ -223,7 +229,7 @@ Put the other supported flows below it with separate sections:
 // MARK: - Additional Flow: One-time persistent manual tracking with tags
 ```
 
-Keep the primary flow first so the app team can find and customize the business-critical path quickly. Do not duplicate SDK sequencing logic unnecessarily; share private helpers for common operations such as device ID setup, SDK enablement, future-tag cleanup, and persistent-mode reset.
+Keep the primary flow first so the app team can find and customize the business-critical path quickly. Do not duplicate SDK sequencing logic unnecessarily; share private helpers for common operations such as SDK enablement, future-tag cleanup, and persistent-mode reset. Keep device ID setup in its own public identity/session method.
 
 ## Tracking Concepts
 
@@ -236,10 +242,17 @@ Standard, app-controlled persistent, and one-time persistent manual flows share 
 
 ## Sequencing Rules
 
-Automatic tracking:
+Device identity setup:
 
 ```swift
 try RPEntry.instance.setDeviceID(deviceId: deviceId)
+```
+
+Call this from login/session binding code before enabling automatic SDK collection or starting manual tracking. Do not repeat it inside every tracking start method.
+
+Automatic tracking:
+
+```swift
 RPEntry.instance.setEnableSdk(true)
 ```
 
@@ -260,7 +273,6 @@ RPEntry.instance.logout()
 Standard manual tracking without tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.startTracking()
@@ -276,7 +288,6 @@ RPEntry.instance.setEnableSdk(false)
 Standard manual tracking with tags. Prefer this sequence inside an async service method:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 RPEntry.instance.setTrackingMode(.standard)
 
@@ -300,7 +311,6 @@ If stopping must never be delayed by network/API cleanup, stop first and run tag
 App-controlled persistent manual tracking without tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.setTrackingMode(.persistent)
@@ -310,7 +320,6 @@ RPEntry.instance.startTracking()
 App-controlled persistent manual tracking with tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: tagValue, source: source)
@@ -334,7 +343,6 @@ Always reset `.standard` after app-controlled persistent sessions unless the pro
 One-time persistent manual tracking without tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.startTrackAsPersistent()
@@ -343,7 +351,6 @@ RPEntry.instance.startTrackAsPersistent()
 One-time persistent manual tracking with tags:
 
 ```swift
-try RPEntry.instance.setDeviceID(deviceId: deviceId)
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: tagValue, source: source)
@@ -386,6 +393,7 @@ Recommended shape:
 ```swift
 final class DamoovTelematicsService: NSObject, TelematicsServicing {
     private let tagsService: TelematicsTagsServicing
+    private var activeManualSessionUsesAppControlledPersistentMode = false
 
     init(tagsService: TelematicsTagsServicing = TelematicsTagsService()) {
         self.tagsService = tagsService
@@ -403,11 +411,9 @@ final class DamoovTelematicsService: NSObject, TelematicsServicing {
     // MARK: - Primary Flow: App-controlled persistent manual tracking with tags
 
     func startPersistentManualTrackingWithTags(
-        deviceId: String,
         tags: [FutureTripTag],
         maxIntervalMinutes: Int
     ) async throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
         RPEntry.instance.setEnableSdk(true)
 
         for tag in tags {
@@ -417,6 +423,7 @@ final class DamoovTelematicsService: NSObject, TelematicsServicing {
         try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: maxIntervalMinutes)
         RPEntry.instance.setTrackingMode(.persistent)
         RPEntry.instance.startTracking()
+        activeManualSessionUsesAppControlledPersistentMode = true
     }
 
     func stopManualTracking(removeFutureTags: Bool) async throws {
@@ -425,29 +432,31 @@ final class DamoovTelematicsService: NSObject, TelematicsServicing {
         }
 
         RPEntry.instance.stopTracking()
+        if activeManualSessionUsesAppControlledPersistentMode {
+            RPEntry.instance.setTrackingMode(.standard)
+            activeManualSessionUsesAppControlledPersistentMode = false
+        }
         RPEntry.instance.setEnableSdk(false)
     }
 
     // MARK: - Additional Flow: Automatic tracking
 
-    func enableAutomaticTracking(deviceId: String) throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
+    func enableAutomaticTracking() throws {
         RPEntry.instance.setEnableSdk(true)
     }
 
     // MARK: - Additional Flow: Standard manual tracking without tags
 
-    func startStandardManualTracking(deviceId: String) throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
+    func startStandardManualTracking() throws {
         RPEntry.instance.setEnableSdk(true)
         RPEntry.instance.setTrackingMode(.standard)
         RPEntry.instance.startTracking()
+        activeManualSessionUsesAppControlledPersistentMode = false
     }
 
     // MARK: - Additional Flow: Standard manual tracking with tags
 
-    func startStandardManualTrackingWithTags(deviceId: String, tags: [FutureTripTag]) async throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
+    func startStandardManualTrackingWithTags(tags: [FutureTripTag]) async throws {
         RPEntry.instance.setEnableSdk(true)
         RPEntry.instance.setTrackingMode(.standard)
 
@@ -456,35 +465,34 @@ final class DamoovTelematicsService: NSObject, TelematicsServicing {
         }
 
         RPEntry.instance.startTracking()
+        activeManualSessionUsesAppControlledPersistentMode = false
     }
 
     // MARK: - Additional Flow: App-controlled persistent manual tracking without tags
 
-    func startPersistentManualTracking(deviceId: String, maxIntervalMinutes: Int) throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
+    func startPersistentManualTracking(maxIntervalMinutes: Int) throws {
         RPEntry.instance.setEnableSdk(true)
         try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: maxIntervalMinutes)
         RPEntry.instance.setTrackingMode(.persistent)
         RPEntry.instance.startTracking()
+        activeManualSessionUsesAppControlledPersistentMode = true
     }
 
     // MARK: - Additional Flow: One-time persistent manual tracking without tags
 
-    func startOneTimePersistentManualTracking(deviceId: String, maxIntervalMinutes: Int) throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
+    func startOneTimePersistentManualTracking(maxIntervalMinutes: Int) throws {
         RPEntry.instance.setEnableSdk(true)
         try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: maxIntervalMinutes)
         RPEntry.instance.startTrackAsPersistent()
+        activeManualSessionUsesAppControlledPersistentMode = false
     }
 
     // MARK: - Additional Flow: One-time persistent manual tracking with tags
 
     func startOneTimePersistentManualTrackingWithTags(
-        deviceId: String,
         tags: [FutureTripTag],
         maxIntervalMinutes: Int
     ) async throws {
-        try RPEntry.instance.setDeviceID(deviceId: deviceId)
         RPEntry.instance.setEnableSdk(true)
 
         for tag in tags {
@@ -493,16 +501,21 @@ final class DamoovTelematicsService: NSObject, TelematicsServicing {
 
         try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: maxIntervalMinutes)
         RPEntry.instance.startTrackAsPersistent()
+        activeManualSessionUsesAppControlledPersistentMode = false
     }
 
-    // MARK: - Additional Flow: SDK disablement
+    // MARK: - Identity and SDK state
 
-    func disableSdk(keepDeviceId: Bool) {
-        if keepDeviceId {
-            RPEntry.instance.setEnableSdk(false)
-        } else {
-            RPEntry.instance.logout()
-        }
+    func setDeviceId(_ deviceId: String) throws {
+        try RPEntry.instance.setDeviceID(deviceId: deviceId)
+    }
+
+    func logout() {
+        RPEntry.instance.logout()
+    }
+
+    func disableSdk() {
+        RPEntry.instance.setEnableSdk(false)
     }
 
     func isTracking() -> Bool {

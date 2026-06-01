@@ -65,10 +65,11 @@ The reference plugin source used to build this skill is the public repository [M
 
 - Create one `TrackingApi` ownership point per feature/service. Avoid creating new `TrackingApi()` instances in many widgets unless the app architecture already does that deliberately.
 - Subscribe to plugin streams in a lifecycle-owned object and cancel subscriptions in `dispose`/service shutdown.
-- Set the device ID before enabling SDK or starting manual tracking.
+- Keep device identity separate from tracking flows and SDK tracking modes. Generated facades should expose an explicit `setDeviceId(...)`/`setDeviceID(...)` method for login/session binding and an explicit `logout()` method for user logout/account removal. Do not make start/stop tracking methods accept or reset the device ID.
+- Set the device ID before enabling SDK or starting manual tracking, but do it through the separate identity method rather than inside each tracking flow method.
 - Check `isAllRequiredPermissionsAndSensorsGranted()` before enabling SDK or starting flows; use `showPermissionWizard(...)` when the product wants plugin-managed permission onboarding.
-- For automatic tracking, call `setDeviceID(...)` then `setEnableSdk(enable: true)`.
-- For standard manual tracking, ensure device ID, permissions, SDK enabled, `setTrackingMode(TrackingMode.standard)`, then `startManualTracking()`.
+- For automatic tracking, assume device ID has already been configured and call `setEnableSdk(enable: true)`.
+- For standard manual tracking, ensure the device ID has already been configured, verify permissions, enable SDK collection, call `setTrackingMode(TrackingMode.standard)`, then `startManualTracking()`.
 - For app-controlled persistent manual tracking, set `TrackingMode.persistent`, start manual tracking, and restore `TrackingMode.standard` when business logic ends persistent mode.
 - For one-time persistent manual tracking, use `startTrackAsPersistent()` and do not add a redundant manual `setTrackingMode(TrackingMode.standard)` reset unless the installed native API proves it does not restore automatically on that platform.
 - For manual-only product flows, stop manual tracking and then disable the SDK with `setEnableSdk(enable: false)`. Keep the SDK enabled after manual stop only when the product intentionally combines manual trips with automatic tracking.

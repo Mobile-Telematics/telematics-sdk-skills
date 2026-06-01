@@ -154,12 +154,19 @@ Supported app-level flows:
 - one-time persistent manual tracking without future tags
 - one-time persistent manual tracking with future tags
 
-For Flutter tagged-flow snippets, `addFutureTrackTagAndWait(...)` means an app facade helper that calls `addFutureTrackTag(...)` and completes only after the `onTagAdd` callback reports the native result. If the app uses the raw plugin method directly, wait for `onTagAdd` before starting tracking when tag attachment is product-critical.
+For Flutter tagged-flow snippets, `addFutureTrackTag(...)` means an app facade helper that calls the raw plugin `TrackingApi.addFutureTrackTag(...)` and completes only after the `onTagAdd` callback reports the native result. If the app uses the raw plugin method directly, wait for `onTagAdd` before starting tracking when tag attachment is product-critical.
+
+Device identity setup:
+
+```dart
+await trackingApi.setDeviceID(deviceId: deviceId);
+```
+
+Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
 
 Automatic tracking:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 ```
 
@@ -180,7 +187,6 @@ await trackingApi.logout();
 Standard manual tracking:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setTrackingMode(trackingMode: TrackingMode.standard);
 await trackingApi.startManualTracking();
@@ -189,17 +195,15 @@ await trackingApi.startManualTracking();
 Standard manual tracking with future tags:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setTrackingMode(trackingMode: TrackingMode.standard);
-await addFutureTrackTagAndWait(tag: tag, source: source);
+await addFutureTrackTag(tag: tag, source: source);
 await trackingApi.startManualTracking();
 ```
 
 App-controlled persistent manual tracking:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setMaxPersistentTrackingInterval(minutes: minutes);
 await trackingApi.setTrackingMode(trackingMode: TrackingMode.persistent);
@@ -209,11 +213,10 @@ await trackingApi.startManualTracking();
 App-controlled persistent manual tracking with future tags:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setMaxPersistentTrackingInterval(minutes: minutes);
 await trackingApi.setTrackingMode(trackingMode: TrackingMode.persistent);
-await addFutureTrackTagAndWait(tag: tag, source: source);
+await addFutureTrackTag(tag: tag, source: source);
 await trackingApi.startManualTracking();
 ```
 
@@ -237,7 +240,6 @@ await trackingApi.setEnableSdk(enable: false);
 One-time persistent manual tracking:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setMaxPersistentTrackingInterval(minutes: minutes);
 await trackingApi.startTrackAsPersistent();
@@ -246,10 +248,9 @@ await trackingApi.startTrackAsPersistent();
 One-time persistent manual tracking with future tags:
 
 ```dart
-await trackingApi.setDeviceID(deviceId: deviceId);
 await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setMaxPersistentTrackingInterval(minutes: minutes);
-await addFutureTrackTagAndWait(tag: tag, source: source);
+await addFutureTrackTag(tag: tag, source: source);
 await trackingApi.startTrackAsPersistent();
 ```
 
@@ -312,7 +313,8 @@ enum TelematicsFlow {
 
 The service should:
 
-- Validate non-empty device ID.
+- Expose a separate identity method that validates and sets a non-empty device ID.
+- Expose `logout()` separately for user logout/account-removal semantics.
 - Check permissions before enable/start flows.
 - Own whether the current session is app-controlled persistent.
 - Sequence future tag calls before manual starts.

@@ -68,6 +68,7 @@ If this path does not exist, inspect the SDK version installed in the target app
 - Wire lifecycle forwarding from the app's actual `AppDelegate`, `SceneDelegate`, or SwiftUI lifecycle bridge into the Telematics lifecycle adapter/service. Do not only implement lifecycle methods inside the facade without calling them from app lifecycle entry points.
 - Lifecycle forwarding methods are mandatory. Do not guard them with `RPEntry.isInitialized`, device ID checks, `hasConfiguredDeviceId`, or similar app-side conditions; the SDK already handles missing device ID or disabled state where applicable.
 - Use `try setDeviceID(deviceId:)` / `getDeviceId()` instead of `virtualDeviceToken`; expose or handle the thrown error instead of ignoring invalid device IDs.
+- Keep device identity separate from tracking flows and SDK tracking modes. Generated facades should expose an explicit `setDeviceId(...)` method for login/session binding and an explicit `logout()` method for user logout/account removal. Do not make start/stop tracking methods accept or reset the device ID.
 - Use method-style setters/getters introduced in `RPEntry` instead of deprecated properties.
 - Put track/origin `RPEntry.instance.api` calls inside `TelematicsAPIService`.
 - Put track-tag and future-tag `RPEntry.instance.api` calls inside `TelematicsTagsService`.
@@ -83,6 +84,7 @@ If this path does not exist, inspect the SDK version installed in the target app
 - For cross-platform manual tagged flows, treat "with tags" as future tags attached before the upcoming manually started trip. iOS also exposes processed-trip tag APIs through `TelematicsTagsService`; keep those as separate post-trip operations rather than mixing them into tracking start flows.
 - If a future tag is required for a manually started trip, add the tag and handle the completion before starting tracking; otherwise document the race.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
+- Use `setEnableSdk(false)` for temporary SDK collection disablement. Use `logout()` only for real logout/account-removal semantics because it clears the device ID.
 - Required facade methods should preserve the SDK callback signatures unless the host app explicitly prefers async overloads. Async convenience methods may be added, but they must not replace the required callback methods.
 - Add English documentation comments to every public method in `TelematicsService`, `TelematicsAPIService`, and `TelematicsTagsService`.
 - Dispatch SDK completion handlers back to the main queue before updating UI; tag API completions are not guaranteed to arrive on the main thread.
