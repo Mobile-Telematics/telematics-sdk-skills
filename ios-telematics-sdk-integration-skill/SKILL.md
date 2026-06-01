@@ -68,6 +68,9 @@ If this path does not exist, inspect the SDK version installed in the target app
 - Wire lifecycle forwarding from the app's actual `AppDelegate`, `SceneDelegate`, or SwiftUI lifecycle bridge into the Telematics lifecycle adapter/service. Do not only implement lifecycle methods inside the facade without calling them from app lifecycle entry points.
 - Lifecycle forwarding methods are mandatory. Do not guard them with `RPEntry.isInitialized`, device ID checks, `hasConfiguredDeviceId`, or similar app-side conditions; the SDK already handles missing device ID or disabled state where applicable.
 - Use `try setDeviceID(deviceId:)` / `getDeviceId()` instead of `virtualDeviceToken`; expose or handle the thrown error instead of ignoring invalid device IDs.
+- Keep device identity separate from tracking flows and SDK tracking modes. Generated facades should expose an explicit `setDeviceId(...)` method for login/session binding and an explicit `logout()` method for user logout/account removal. Do not make start/stop tracking methods accept or reset the device ID.
+- Treat the device ID as a Damoov-issued user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov platform value.
+- Do not add API-key or credentials setup to app code; the SDK initialization APIs used by this skill do not take credentials.
 - Use method-style setters/getters introduced in `RPEntry` instead of deprecated properties.
 - Put track/origin `RPEntry.instance.api` calls inside `TelematicsAPIService`.
 - Put track-tag and future-tag `RPEntry.instance.api` calls inside `TelematicsTagsService`.
@@ -76,13 +79,16 @@ If this path does not exist, inspect the SDK version installed in the target app
 - Treat automatic/manual tracking as app-level flows; treat `.standard`/`.persistent` as SDK tracking modes configured with `setTrackingMode`.
 - For app-controlled persistent SDK mode, use `setTrackingMode(.persistent)` plus `startTracking()` and switch back with `setTrackingMode(.standard)` when business logic requires it.
 - For one-time persistent manual tracking, use `startTrackAsPersistent()`. The SDK switches `trackingMode` to `.persistent` at start and automatically restores `.standard` after `stopTracking()` or when `setMaxPersistentTrackingInterval` is reached; do not add a redundant manual mode reset for that flow.
-- If one service method stops all manual flows, track whether the active session was app-controlled persistent before deciding to call `setTrackingMode(.standard)`.
+- Prefer explicit stop methods for app-controlled persistent flows when the service needs to restore `.standard`; do not add hidden state only to infer which stop path is active.
+- Starting tracking while tracking is already active is idempotent: the SDK continues recording the existing track and does not start a new one.
 - In reusable Telematics services, implement all supported flows but place the user-requested primary flow first and mark it with `// MARK: - Primary Flow: <name requested by user>`.
 - Place the remaining flows below with separate `// MARK: - Additional Flow: <flow name>` sections.
 - Supported flows are: automatic tracking, standard manual tracking without tags, standard manual tracking with tags, app-controlled persistent manual tracking without tags, app-controlled persistent manual tracking with tags, one-time persistent manual tracking without tags, and one-time persistent manual tracking with tags.
+- Expose a relevant stop method for every supported flow: automatic disables SDK collection, standard manual stops tracking and disables SDK collection, tagged manual flows remove future tags before stopping, app-controlled persistent flows also restore `.standard`, and one-time persistent flows do not manually restore `.standard`.
 - For cross-platform manual tagged flows, treat "with tags" as future tags attached before the upcoming manually started trip. iOS also exposes processed-trip tag APIs through `TelematicsTagsService`; keep those as separate post-trip operations rather than mixing them into tracking start flows.
 - If a future tag is required for a manually started trip, add the tag and handle the completion before starting tracking; otherwise document the race.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
+- Use `setEnableSdk(false)` for temporary SDK collection disablement. Use `logout()` only for real logout/account-removal semantics because it clears the device ID.
 - Required facade methods should preserve the SDK callback signatures unless the host app explicitly prefers async overloads. Async convenience methods may be added, but they must not replace the required callback methods.
 - Add English documentation comments to every public method in `TelematicsService`, `TelematicsAPIService`, and `TelematicsTagsService`.
 - Dispatch SDK completion handlers back to the main queue before updating UI; tag API completions are not guaranteed to arrive on the main thread.

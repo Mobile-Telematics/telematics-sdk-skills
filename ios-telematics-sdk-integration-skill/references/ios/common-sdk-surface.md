@@ -80,6 +80,23 @@ Do not implement lifecycle methods only inside `TelematicsService` and leave the
 
 Do not forward both SceneDelegate and non-Scene foreground/background methods for the same lifecycle path unless the host app intentionally uses both and has verified there is no duplicated SDK work.
 
+For SwiftUI apps, bridge a standard `AppDelegate` into the SwiftUI app entry point:
+
+```swift
+import SwiftUI
+
+@main
+struct ExampleApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
 Lifecycle forwarding is mandatory. Do not guard SDK lifecycle calls with app-side checks such as:
 
 - `RPEntry.isInitialized`
@@ -102,6 +119,12 @@ Common current APIs:
 - `setDisableTracking(disableTracking:)`
 - `isDisableTracking()`
 
+Device ID source and credentials:
+
+- The device ID is a Damoov platform identifier for the current user, formatted as a GUID.
+- The app should receive this value from the product backend or Damoov platform integration. Do not generate a random local UUID unless the product backend has explicitly delegated that Damoov identifier to the client.
+- App-side SDK initialization does not use API keys or credentials. `RPEntry.initializeSDK()` has no API-key parameter, and the app does not need to add credentials to `Info.plist` for the SDK setup described here.
+
 Device ID setter signature:
 
 ```swift
@@ -117,6 +140,7 @@ Device ID setter signature:
 Key behavior:
 
 - `setDeviceID(deviceId:)` sets the device id (device ID) for the current SDK session. It throws, so app service APIs that assign a device ID should expose or handle that failure.
+- Facades should validate that the value is a non-empty GUID before calling `setDeviceID(deviceId:)`. If the installed SDK has stricter validation, preserve the thrown SDK error instead of swallowing it.
 - `setEnableSdk(false)` disables SDK collection and stops tracking-related operations, but keeps the device ID.
 - `logout()` disables the SDK and clears the device ID. Use it for logout/account removal semantics only.
 - `setDisableTracking(disableTracking:)` prevents new user-initiated tracking sessions; it is not the same as disabling the SDK.
@@ -301,6 +325,19 @@ Future tags:
 - `removeAllFutureTrackTags(completion:)`
 
 Future-tag APIs are commonly used by manual flows, but the API surface itself is common. If a future tag is required for a manually started trip, wait for the add completion before calling `startTracking()`.
+
+Future tag values:
+
+- `tag` and `source` are strings. The SDK does not impose a fixed enum or SDK-side value list.
+- Use product-defined tag values such as trip purpose, and use `source` for the app module or user action that created the tag.
+- Keep validation product-side when the business domain has allowed values.
+
+`RPTagStatus` cases:
+
+- `.success`: the future tag operation completed successfully.
+- `.offline`: the operation could not be completed because there is no internet connection.
+- `.errorTagOperation`: the backend rejected the tag operation.
+- `.invalidDeviceId`: the operation was not started because the SDK device identifier is missing or invalid.
 
 `TelematicsTagsService` must implement at least:
 
