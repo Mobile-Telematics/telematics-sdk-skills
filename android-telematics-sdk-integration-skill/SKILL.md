@@ -62,7 +62,7 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
     Do you want me to add use cases for telematics workflows, or keep the integration repository-only?
 
     Proposed use cases:
-    - EnableAutomaticModeUseCase: enable automatic SDK tracking for a device ID.
+    - EnableAutomaticModeUseCase: enable automatic SDK tracking after the device ID has already been configured.
     - EnableDisabledModeUseCase: stop active tracking if needed and disable SDK collection.
     - PrepareOnDemandModeUseCase: save/prepare the device ID while keeping SDK collection disabled until the user starts a trip.
     - StartOnDemandTripUseCase: start a one-time persistent manual trip.
@@ -98,23 +98,28 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
 - Use `Settings()` builder functions for SDK 4.x: `accuracy(...)`, `stopTrackingTimeout(...)`, `autoStartOn(...)`, `adOn(...)`, and `passiveDetectionOn(...)`.
 - Do not use old `Settings(...)` constructors with HF, ELM, or legacy boolean arguments.
 - Use `setDeviceID(deviceId)` / `getDeviceId()` / `clearDeviceID()` / `logout()` instead of `setDeviceToken`, `virtualDeviceToken`, or app-side token aliases in SDK calls.
-- Set a valid device ID before enabling the SDK or starting tracking.
+- Treat the device ID as a Damoov-issued user identifier, normally GUID-formatted. Do not generate it locally unless the product backend explicitly proxies or delegates the Damoov platform value to the app.
+- Do not add API-key or credentials setup to Android app code; the SDK initialization APIs used by this skill do not take app-provided credentials.
+- Set a valid device ID before enabling the SDK or starting tracking. Keep device identity separate from tracking flows: generated repositories should expose `setDeviceId(...)` for login/session binding, and start/enable tracking methods should not accept or reset the device ID.
 - Check `isAllRequiredPermissionsAndSensorsGranted()` before enabling the SDK. Do not rely on compile-time manifest declarations as runtime permission proof.
 - Do not remove or cap SDK manifest permissions without verifying merged manifest behavior and runtime requirements.
 - Use `setEnableSdk(true)` / `setEnableSdk(false)`. Do not use removed `setEnableSdk(enable, withCheckingPermissions)` overloads.
 - Expose `enableSdk()` and `disableSdk()` as separate repository methods. `disableSdk()` must only disable collection with `setEnableSdk(false)`; do not add identity-clearing parameters and do not call `logout()` from it.
 - Expose `logout()` as a separate repository method for account/device identity removal. Use it only when the product explicitly wants SDK logout semantics.
 - When use cases are integrated, implement `LogoutUseCase` so it first switches the app trip-recording mode to `TripRecordMode.DISABLED` with `isActive = false`, then calls `TelematicsRepository.logout()`.
-- In repository methods such as `enableAutomaticTracking`, `startStandardManualTracking`, persistent manual starts, and one-time persistent starts, call SDK mutators only when the current SDK state differs: compare `getDeviceId()` before `setDeviceID(deviceId)`, `isSdkEnabled()` before `setEnableSdk(true/false)`, `getTrackingMode()` before `setTrackingMode(...)`, and `getMaxPersistentTrackingInterval()` before `setMaxPersistentTrackingInterval(minutes)`.
+- In repository methods such as `setDeviceId`, `enableAutomaticTracking`, `startStandardManualTracking`, persistent manual starts, and one-time persistent starts, call SDK mutators only when the current SDK state differs: compare `getDeviceId()` before `setDeviceID(deviceId)`, `isSdkEnabled()` before `setEnableSdk(true/false)`, `getTrackingMode()` before `setTrackingMode(...)`, and `getMaxPersistentTrackingInterval()` before `setMaxPersistentTrackingInterval(minutes)`.
 - Treat automatic/manual tracking as app-level flows; treat `TrackingMode.Standard`/`TrackingMode.Persistent` as SDK tracking modes configured with `setTrackingMode(...)`.
 - For standard manual tracking, use `setTrackingMode(TrackingMode.Standard)` plus `startTracking()`.
 - For app-controlled persistent SDK mode, use `setTrackingMode(TrackingMode.Persistent)` plus `startTracking()` and switch back with `setTrackingMode(TrackingMode.Standard)` when business logic requires it.
 - For one-time persistent manual tracking, use `startTrackAsPersistent()`. Do not call deprecated `startPersistentTracking()`.
 - Configure persistent intervals with `setMaxPersistentTrackingInterval(minutes)` only in the valid `5..600` minute range; default is `240` minutes.
-- If one repository method stops all manual flows, track whether the active session was app-controlled persistent before deciding to call `setTrackingMode(TrackingMode.Standard)`.
+- Prefer explicit stop methods for each supported flow instead of one hidden-state-driven stop method. If a repository still exposes one shared manual stop helper internally, only app-controlled persistent flows may restore `TrackingMode.Standard`.
+- Expose a relevant stop method for every supported flow: automatic disables SDK collection, standard manual stops tracking and disables SDK collection, tagged manual flows remove future tags before stopping when cleanup is required, app-controlled persistent flows also restore `TrackingMode.Standard`, and one-time persistent flows must not manually restore `TrackingMode.Standard`.
 - Persist app-level trip recording mode state outside `TelematicsRepository`, for example as `(TripRecordMode, isActive)` in the host app's preferences/settings layer. Use cases must update this state after successful mode transitions and read it before deciding whether to enable, disable, stop, or start tracking.
 - For cross-platform manual tagged flows, treat "with tags" as future tags attached before the upcoming manually started trip.
-- If a future tag is required for a manually started trip, add the tag and wait for the tag processing result before starting tracking; otherwise document the race.
+- Future tag `tag` and `source` values are product-defined strings. Do not invent SDK-side enums or hardcoded user-visible labels for them; validate allowed business values in the host app/backend when needed.
+- If a future tag is required for a manually started trip, add the tag and wait for the tag processing callback/receiver status before starting tracking; otherwise document the race.
+- Do not collapse future-tag result statuses to `Unit` when sequencing depends on them. Preserve or map SDK statuses such as success, offline/backend failure, invalid device ID, or generic tag operation failure into the app's result/error model.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
 - Do not silently ignore `Boolean` return values from `startTracking()`, `startTrackAsPersistent()`, `stopTracking()`, or registration APIs.
 - Do not call blocking trip/statistics APIs such as `getTracks(...)` or `getTrackDetails(...)` on the main thread.

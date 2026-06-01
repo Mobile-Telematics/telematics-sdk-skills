@@ -48,6 +48,19 @@ TrackingApi.getInstance().initialize(applicationContext, settings)
 
 Use application context. Avoid `Activity` context for initialization.
 
+## Device Identity
+
+Set the SDK device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking:
+
+```kotlin
+val api = TrackingApi.getInstance()
+if (api.getDeviceId() != deviceId) {
+    api.setDeviceID(deviceId)
+}
+```
+
+The device ID should come from the product backend or Damoov platform integration and is normally GUID-formatted. Do not generate it locally unless the product backend explicitly proxies or delegates the Damoov platform value to the app. Do not pass the device ID through start/stop tracking methods; keep `setDeviceId(...)` as the explicit identity/session method.
+
 ## Tracking Flows
 
 These are app-level flows that decide when SDK collection or a manual trip should start and stop. Do not confuse them with SDK tracking modes (`TrackingMode.Standard` and `TrackingMode.Persistent`), which configure how the SDK tracks after a flow enables or starts tracking.
@@ -67,6 +80,8 @@ Supported flows:
 ## High-Level Operating Mode Use Cases
 
 Expose these product-level modes as use cases only when the user asks for use cases or when the host app already has a matching domain/use-case layer. They come from the Android tracking modes guide and are app-level policies over SDK enablement/tracking calls. Use cases should orchestrate `TelematicsRepository`; they should not call `TrackingApi` directly.
+
+Use cases that enable or start tracking assume the SDK device ID has already been configured through `setDeviceId(...)` or a prepare/session-binding use case. Do not add `deviceId` parameters to start/enable use cases.
 
 If the app has a trip-recording mode selector, persist the selected mode and active state in the host app's preferences/settings layer. Use cases should read the previous state before deciding how to transition and write the new state after SDK operations succeed.
 
@@ -95,8 +110,8 @@ Automatic mode:
 class EnableAutomaticModeUseCase @Inject constructor(
     private val telematicsRepository: TelematicsRepository
 ) {
-    suspend operator fun invoke(deviceId: String) {
-        telematicsRepository.enableAutomaticTracking(deviceId).getOrThrow()
+    suspend operator fun invoke() {
+        telematicsRepository.enableAutomaticTracking().getOrThrow()
     }
 }
 ```
@@ -108,7 +123,6 @@ class EnableDisabledModeUseCase @Inject constructor(
     private val telematicsRepository: TelematicsRepository
 ) {
     suspend operator fun invoke() {
-        telematicsRepository.stopManualTracking(removeFutureTags = false)
         telematicsRepository.disableSdk().getOrThrow()
     }
 }
@@ -133,7 +147,6 @@ On-demand trip control:
 
 ```kotlin
 data class OnDemandTripParams(
-    val deviceId: String,
     val maxIntervalMinutes: Int
 )
 
@@ -142,7 +155,6 @@ class StartOnDemandTripUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(parameters: OnDemandTripParams) {
         telematicsRepository.startOneTimePersistentManualTracking(
-            deviceId = parameters.deviceId,
             maxIntervalMinutes = parameters.maxIntervalMinutes
         ).getOrThrow()
     }
@@ -152,7 +164,7 @@ class StopOnDemandTripUseCase @Inject constructor(
     private val telematicsRepository: TelematicsRepository
 ) {
     suspend operator fun invoke() {
-        telematicsRepository.stopManualTracking(removeFutureTags = false).getOrThrow()
+        telematicsRepository.stopOneTimePersistentManualTracking().getOrThrow()
     }
 }
 ```
@@ -163,8 +175,8 @@ Shift mode:
 class SignOnShiftUseCase @Inject constructor(
     private val telematicsRepository: TelematicsRepository
 ) {
-    suspend operator fun invoke(deviceId: String) {
-        telematicsRepository.enableAutomaticTracking(deviceId).getOrThrow()
+    suspend operator fun invoke() {
+        telematicsRepository.enableAutomaticTracking().getOrThrow()
     }
 }
 
@@ -172,8 +184,7 @@ class SignOffShiftUseCase @Inject constructor(
     private val telematicsRepository: TelematicsRepository
 ) {
     suspend operator fun invoke() {
-        telematicsRepository.stopManualTracking(removeFutureTags = false)
-        telematicsRepository.disableSdk().getOrThrow()
+        telematicsRepository.disableAutomaticTracking().getOrThrow()
     }
 }
 ```
@@ -186,7 +197,6 @@ Mode selector orchestration:
 data class SetTripRecordModeParams(
     val mode: TripRecordMode,
     val isActive: Boolean,
-    val deviceId: String,
     val persistentIntervalMinutes: Int
 )
 
@@ -200,7 +210,7 @@ class SetTripRecordModeUseCase @Inject constructor(
         when (parameters.mode) {
             TripRecordMode.ALWAYS_ON -> {
                 if (current.mode != TripRecordMode.ALWAYS_ON) {
-                    telematicsRepository.enableAutomaticTracking(parameters.deviceId).getOrThrow()
+                    telematicsRepository.enableAutomaticTracking().getOrThrow()
                 }
             }
 
@@ -209,13 +219,9 @@ class SetTripRecordModeUseCase @Inject constructor(
                     telematicsRepository.enableSdk().getOrThrow()
                 } else {
                     if (current.mode == TripRecordMode.SHIFT_MODE) {
-                        telematicsRepository.stopManualTracking(removeFutureTags = false).getOrThrow()
-                        telematicsRepository.disableSdk().getOrThrow()
+                        telematicsRepository.disableAutomaticTracking().getOrThrow()
                     } else if (telematicsRepository.isSdkEnabled()) {
-                        telematicsRepository.stopManualTracking(removeFutureTags = false).getOrThrow()
-                        telematicsRepository.disableSdk().getOrThrow()
-                    } else {
-                        telematicsRepository.setDeviceId(parameters.deviceId).getOrThrow()
+                        telematicsRepository.disableAutomaticTracking().getOrThrow()
                     }
                 }
             }
@@ -223,26 +229,26 @@ class SetTripRecordModeUseCase @Inject constructor(
             TripRecordMode.ON_DEMAND -> {
                 if (current.mode == TripRecordMode.ON_DEMAND && parameters.isActive) {
                     telematicsRepository.startOneTimePersistentManualTracking(
-                        deviceId = parameters.deviceId,
                         maxIntervalMinutes = parameters.persistentIntervalMinutes
                     ).getOrThrow()
                 } else {
                     if (current.mode == TripRecordMode.ON_DEMAND) {
-                        telematicsRepository.stopManualTracking(removeFutureTags = false).getOrThrow()
-                        telematicsRepository.disableSdk().getOrThrow()
+                        telematicsRepository.stopOneTimePersistentManualTracking().getOrThrow()
                     } else if (telematicsRepository.isSdkEnabled()) {
-                        telematicsRepository.stopManualTracking(removeFutureTags = false).getOrThrow()
-                        telematicsRepository.disableSdk().getOrThrow()
-                    } else {
-                        telematicsRepository.setDeviceId(parameters.deviceId).getOrThrow()
+                        telematicsRepository.disableAutomaticTracking().getOrThrow()
                     }
                 }
             }
 
             TripRecordMode.DISABLED -> {
                 if (current.mode != TripRecordMode.DISABLED) {
-                    telematicsRepository.stopManualTracking(removeFutureTags = false).getOrThrow()
-                    telematicsRepository.disableSdk().getOrThrow()
+                    when (current.mode) {
+                        TripRecordMode.ON_DEMAND ->
+                            telematicsRepository.stopOneTimePersistentManualTracking().getOrThrow()
+                        TripRecordMode.SHIFT_MODE, TripRecordMode.ALWAYS_ON ->
+                            telematicsRepository.disableAutomaticTracking().getOrThrow()
+                        TripRecordMode.DISABLED -> Unit
+                    }
                 }
             }
         }
@@ -263,7 +269,6 @@ Logout orchestration:
 
 ```kotlin
 data class LogoutParams(
-    val deviceId: String,
     val persistentIntervalMinutes: Int
 )
 
@@ -276,7 +281,6 @@ class LogoutUseCase @Inject constructor(
             SetTripRecordModeParams(
                 mode = TripRecordMode.DISABLED,
                 isActive = false,
-                deviceId = parameters.deviceId,
                 persistentIntervalMinutes = parameters.persistentIntervalMinutes
             )
         )
@@ -289,7 +293,7 @@ Pass the host app's configured/default persistent interval into the use case. Th
 
 ## Common Helpers
 
-Use idempotent helper sequencing like this inside the app-owned facade. Read SDK state first and call SDK mutators only when the current value differs:
+Use idempotent helper sequencing like this inside the app-owned facade. Read SDK state first and call SDK mutators only when the current value differs. Use `ensureDeviceId(...)` from the public `setDeviceId(...)` method, not from tracking start methods:
 
 ```kotlin
 private fun ensureDeviceId(api: TrackingApi, deviceId: String): TelematicsResult {
@@ -347,12 +351,17 @@ Use the host app's existing result/error style instead of introducing this exact
 ```kotlin
 val api = TrackingApi.getInstance()
 if (api.isAllRequiredPermissionsAndSensorsGranted()) {
-    ensureDeviceId(api, deviceId)
     enableSdk()
 }
 ```
 
 Automatic tracking depends on `Settings().autoStartOn(true)` or later `setAutoStartEnabled(true, permanent)` depending on product behavior.
+
+Automatic tracking stop:
+
+```kotlin
+disableSdk()
+```
 
 Disable SDK collection while keeping the device ID:
 
@@ -372,7 +381,6 @@ TrackingApi.getInstance().logout()
 
 ```kotlin
 val api = TrackingApi.getInstance()
-ensureDeviceId(api, deviceId)
 enableSdk()
 configureTrackingMode(TrackingMode.Standard)
 val started = api.startTracking()
@@ -380,7 +388,7 @@ val started = api.startTracking()
 
 Handle `started == false`; it can indicate missing preconditions or an already active/rejected session.
 
-Manual stop:
+Standard manual stop without tags:
 
 ```kotlin
 val stopped = TrackingApi.getInstance().stopTracking()
@@ -393,7 +401,6 @@ For cross-platform manual tagged flows, "with tags" means future tags added befo
 
 ```kotlin
 val api = TrackingApi.getInstance()
-ensureDeviceId(api, deviceId)
 enableSdk()
 configureTrackingMode(TrackingMode.Standard)
 
@@ -406,6 +413,15 @@ val started = api.startTracking()
 ```
 
 Starting tracking before required future tags are confirmed is a race. If product requirements tolerate best-effort tags, document that tradeoff in the repository method KDoc.
+
+Standard manual stop with future-tag cleanup:
+
+```kotlin
+api.removeAllFutureTrackTags()
+// Wait for cleanup status when cleanup must be guaranteed before stop/disable.
+val stopped = api.stopTracking()
+disableSdk()
+```
 
 ## SDK Tracking Modes
 
@@ -444,7 +460,6 @@ Without tags:
 
 ```kotlin
 val api = TrackingApi.getInstance()
-ensureDeviceId(api, deviceId)
 enableSdk()
 configurePersistentInterval(minutes)
 configureTrackingMode(TrackingMode.Persistent)
@@ -455,7 +470,6 @@ With tags:
 
 ```kotlin
 val api = TrackingApi.getInstance()
-ensureDeviceId(api, deviceId)
 enableSdk()
 
 tags.forEach { tag ->
@@ -468,7 +482,15 @@ configureTrackingMode(TrackingMode.Persistent)
 val started = api.startTracking()
 ```
 
-Stop app-controlled persistent tracking:
+App-controlled persistent stop without tags:
+
+```kotlin
+val stopped = api.stopTracking()
+configureTrackingMode(TrackingMode.Standard)
+disableSdk()
+```
+
+App-controlled persistent stop with future-tag cleanup:
 
 ```kotlin
 api.removeAllFutureTrackTags()
@@ -486,7 +508,6 @@ Without tags:
 
 ```kotlin
 val api = TrackingApi.getInstance()
-ensureDeviceId(api, deviceId)
 enableSdk()
 configurePersistentInterval(minutes)
 val started = api.startTrackAsPersistent()
@@ -496,7 +517,6 @@ With tags:
 
 ```kotlin
 val api = TrackingApi.getInstance()
-ensureDeviceId(api, deviceId)
 enableSdk()
 
 tags.forEach { tag ->
@@ -508,7 +528,14 @@ configurePersistentInterval(minutes)
 val started = api.startTrackAsPersistent()
 ```
 
-Stop one-time persistent tracking:
+One-time persistent stop without tags:
+
+```kotlin
+val stopped = api.stopTracking()
+disableSdk()
+```
+
+One-time persistent stop with future-tag cleanup:
 
 ```kotlin
 api.removeAllFutureTrackTags()
@@ -519,7 +546,7 @@ disableSdk()
 
 Do not call deprecated `startPersistentTracking()`. Do not use app-controlled `setTrackingMode(TrackingMode.Persistent)` / `setTrackingMode(TrackingMode.Standard)` to implement one-time persistent behavior unless the resolved SDK version lacks `startTrackAsPersistent()`.
 
-If a reusable repository exposes one shared manual stop method, track whether the active manual session was started with app-controlled persistent mode. Only call `setTrackingMode(TrackingMode.Standard)` for that case.
+Prefer explicit stop methods for app-controlled persistent flows when the repository needs to restore `TrackingMode.Standard`; do not add hidden state only to infer which stop path is active.
 
 ## Tags Repository
 
@@ -533,6 +560,10 @@ api.removeAllFutureTrackTags()
 ```
 
 Register a `TagsProcessingListener` or `TagsProcessingReceiver` before issuing tag operations whose result matters.
+
+`tag` and `source` are product-defined strings. The SDK does not define a fixed enum or SDK-side value list for product tags. Use `tag` for the business label and `source` for the app module or user action that created it.
+
+Future tag callbacks return SDK status. Preserve or map that status into the app's result/error model, especially for manual start sequencing. Treat success as the only guaranteed state for required tags; offline, invalid-device, backend rejection, and generic operation failures should not be silently converted to success.
 
 Processed-trip tag APIs are separate post-trip operations:
 
