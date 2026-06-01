@@ -20,6 +20,8 @@ As of the last verification for this skill, the SPM repository reported `7.1.0` 
 
 Also inspect the target app lockfile (`Package.resolved`) and the runtime SDK version with `RPEntry.instance.getSdkVersion()` where runtime access is possible. Lockfiles and runtime checks tell you what is installed; SPM tags tell you what latest version to integrate.
 
+For Xcode projects without a top-level `Package.swift`, inspect and modify the actual package/project structure instead of assuming a single layout. The skill should integrate the SPM package through the app's existing project metadata where possible; do not require a developer to perform Xcode GUI steps manually when the project files can be updated directly.
+
 ## Required iOS Configuration
 
 Check `Info.plist` for:
@@ -62,6 +64,23 @@ If both `AppDelegate` and `SceneDelegate` are absent and the app's minimum iOS v
 Lifecycle forwarding is mandatory. Do not skip these SDK calls behind guards such as `RPEntry.isInitialized`, empty device ID checks, `hasConfiguredDeviceId`, or custom service state. The SDK handles missing device ID or disabled state where applicable.
 
 In `application(_:didFinishLaunchingWithOptions:)`, `RPEntry.initializeSDK()` must be the first executable statement, immediately followed by `RPEntry.instance.application(application, didFinishLaunchingWithOptions: launchOptions ?? [:])`.
+
+SwiftUI apps still need an app delegate bridge. Use `UIApplicationDelegateAdaptor` to connect a standard `AppDelegate` that performs SDK initialization and app lifecycle forwarding:
+
+```swift
+import SwiftUI
+
+@main
+struct ExampleApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
 
 ### AppDelegate
 
@@ -147,7 +166,9 @@ Device identity setup:
 try RPEntry.instance.setDeviceID(deviceId: deviceId)
 ```
 
-Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
+Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. The value is a Damoov platform user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov value, and do not repeat this call inside every tracking start method.
+
+App-side SDK initialization does not use API keys or credentials. Do not add API-key parameters or `Info.plist` credentials for the SDK setup described here.
 
 Automatic tracking enablement:
 
@@ -203,6 +224,8 @@ RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.startTracking()
 ```
 
+Calling `startTracking()` while tracking is already active is idempotent: the SDK continues the existing track and does not start a new one. A facade may still check `isTracking()` to keep UI state clear.
+
 Manual stop:
 
 ```swift
@@ -240,7 +263,6 @@ When app-controlled persistent mode is no longer desired:
 
 ```swift
 RPEntry.instance.stopTracking()
-RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.setEnableSdk(false)
 ```
 
@@ -266,7 +288,7 @@ RPEntry.instance.setEnableSdk(false)
 
 Call `startTrackAsPersistent()` on the main thread. Do not call `setTrackingMode(.persistent)` before it and do not manually restore `.standard` after stopping this one-time flow; the SDK owns that transition.
 
-If a service uses one shared manual stop method for all manual flows, track whether the active session was app-controlled persistent. Only that flow should manually call `setTrackingMode(.standard)` after `stopTracking()`.
+Prefer explicit stop methods for app-controlled persistent flows when the service needs to restore `.standard`; do not add hidden state only to infer which stop path is active.
 
 Tracking status:
 
@@ -427,6 +449,15 @@ Available methods:
 
 Future tags are handled through `RPEntry.instance.api` and `RPFutureTag`. The SDK exposes completion-handler methods; app code should call `TelematicsTagsService` methods instead of these callbacks directly.
 
+`tag` and `source` are product-defined strings. The SDK does not define an enum or impose SDK-side restrictions on those values. Use `tag` for the business label and `source` for the app module or user action that created it.
+
+`RPTagStatus` values:
+
+- `.success`: the future tag operation completed successfully.
+- `.offline`: the operation could not be completed because there is no internet connection.
+- `.errorTagOperation`: the backend rejected the tag operation.
+- `.invalidDeviceId`: the operation was not started because the SDK device identifier is missing or invalid.
+
 Available methods:
 
 - `getFutureTrackTag(_:completion:)`
@@ -474,25 +505,31 @@ final class TelematicsTagsService {
 `TelematicsService` may add private async helpers around `TelematicsTagsService` callbacks when tracking flow sequencing needs `try await`:
 
 ```swift
-private func addFutureTrackTag(_ tag: RPFutureTag) async throws {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        tagsService.addFutureTrackTag(tag) { _, error in
+private func addFutureTrackTag(_ tag: RPFutureTag) async throws -> RPTagStatus {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RPTagStatus, Error>) in
+        tagsService.addFutureTrackTag(tag) { status, error in
             if let error {
                 continuation.resume(throwing: error)
             } else {
-                continuation.resume()
+                continuation.resume(returning: status)
             }
         }
     }
 }
+```
 
-private func removeAllFutureTrackTags() async throws {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        tagsService.removeAllFutureTrackTags { _, error in
+This helper preserves the SDK status returned by the completion. The app can decide whether a non-success status should block the manual start.
+
+`removeAllFutureTrackTags()` can use the same status-returning policy when cleanup is required before a tagged manual flow stops:
+
+```swift
+private func removeAllFutureTrackTags() async throws -> RPTagStatus {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RPTagStatus, Error>) in
+        tagsService.removeAllFutureTrackTags { status, error in
             if let error {
                 continuation.resume(throwing: error)
             } else {
-                continuation.resume()
+                continuation.resume(returning: status)
             }
         }
     }
@@ -506,14 +543,15 @@ RPEntry.instance.setEnableSdk(true)
 RPEntry.instance.setTrackingMode(.standard)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await addFutureTrackTag(tag)
+let status = try await addFutureTrackTag(tag)
+guard status == .success else { return }
 RPEntry.instance.startTracking()
 ```
 
 For stop with tag cleanup:
 
 ```swift
-try await removeAllFutureTrackTags()
+_ = try await removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setEnableSdk(false)
 ```
@@ -533,7 +571,8 @@ App-controlled persistent manual tracking with future tags:
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await addFutureTrackTag(tag)
+let status = try await addFutureTrackTag(tag)
+guard status == .success else { return }
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.setTrackingMode(.persistent)
 RPEntry.instance.startTracking()
@@ -542,7 +581,7 @@ RPEntry.instance.startTracking()
 Persistent stop with cleanup for app-controlled persistent mode:
 
 ```swift
-try await removeAllFutureTrackTags()
+_ = try await removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setTrackingMode(.standard)
 RPEntry.instance.setEnableSdk(false)
@@ -562,7 +601,8 @@ One-time persistent manual tracking with future tags:
 RPEntry.instance.setEnableSdk(true)
 
 let tag = RPFutureTag(tag: "TAG", source: "SOURCE")
-try await addFutureTrackTag(tag)
+let status = try await addFutureTrackTag(tag)
+guard status == .success else { return }
 try RPEntry.instance.setMaxPersistentTrackingInterval(minutes: minutes)
 RPEntry.instance.startTrackAsPersistent()
 ```
@@ -570,9 +610,13 @@ RPEntry.instance.startTrackAsPersistent()
 One-time persistent stop with cleanup:
 
 ```swift
-try await removeAllFutureTrackTags()
+_ = try await removeAllFutureTrackTags()
 RPEntry.instance.stopTracking()
 RPEntry.instance.setEnableSdk(false)
 ```
 
 The tag APIs are asynchronous. Starting tracking before required tag completion may create a race where the trip starts without the intended tag.
+
+## Testing Notes
+
+iOS Simulator can be used to exercise integration flow, permissions, and simulated location/trip recording. Use Xcode location simulation or GPX routes for manual checks. HF Data cannot be fully tested on simulator because accelerometer and gyroscope sensor data are not available like on a physical device. Final background behavior and sensor-heavy validation should run on a real device.

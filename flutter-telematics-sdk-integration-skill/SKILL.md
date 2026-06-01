@@ -66,6 +66,8 @@ The reference plugin source used to build this skill is the public repository [M
 - Create one `TrackingApi` ownership point per feature/service. Avoid creating new `TrackingApi()` instances in many widgets unless the app architecture already does that deliberately.
 - Subscribe to plugin streams in a lifecycle-owned object and cancel subscriptions in `dispose`/service shutdown.
 - Keep device identity separate from tracking flows and SDK tracking modes. Generated facades should expose an explicit `setDeviceId(...)`/`setDeviceID(...)` method for login/session binding and an explicit `logout()` method for user logout/account removal. Do not make start/stop tracking methods accept or reset the device ID.
+- Treat the device ID as a Damoov-issued user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov platform value.
+- Do not add API-key or credentials setup to app code; the Flutter plugin entry points used by this skill do not take credentials.
 - Set the device ID before enabling SDK or starting manual tracking, but do it through the separate identity method rather than inside each tracking flow method.
 - Check `isAllRequiredPermissionsAndSensorsGranted()` before enabling SDK or starting flows; use `showPermissionWizard(...)` when the product wants plugin-managed permission onboarding.
 - For automatic tracking, assume device ID has already been configured and call `setEnableSdk(enable: true)`.
@@ -74,6 +76,7 @@ The reference plugin source used to build this skill is the public repository [M
 - For one-time persistent manual tracking, use `startTrackAsPersistent()` and do not add a redundant manual `setTrackingMode(TrackingMode.standard)` reset unless the installed native API proves it does not restore automatically on that platform.
 - For manual-only product flows, stop manual tracking and then disable the SDK with `setEnableSdk(enable: false)`. Keep the SDK enabled after manual stop only when the product intentionally combines manual trips with automatic tracking.
 - If one service method stops all manual flows, track whether the active session was app-controlled persistent before deciding to restore `TrackingMode.standard`.
+- Starting tracking while tracking is already active is idempotent: the SDK continues recording the existing track and does not start a new one.
 - Add future tags before starting a manually tagged trip; wait for the native callback or document the race if the product accepts it.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
 - Treat tagged manual flows as future-tag flows for upcoming trips. Do not imply processed-trip tag editing unless the latest installed plugin exposes that API.

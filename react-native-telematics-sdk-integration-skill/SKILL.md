@@ -67,6 +67,8 @@ The reference plugin source used to build this skill is the public repository [M
 - Keep one app-owned ownership point for plugin calls. Avoid direct calls from many screens unless the app architecture already has a deliberate feature boundary.
 - Add listeners in lifecycle-owned code and always call `.remove()` during cleanup.
 - Keep device identity separate from tracking flows and SDK tracking modes. Generated facades should expose an explicit `setDeviceId(...)` method for login/session binding and an explicit `logout()` method for user logout/account removal. Do not make start/stop tracking methods accept or reset the device ID.
+- Treat the device ID as a Damoov-issued user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov platform value.
+- Do not add API-key or credentials setup to app code; the React Native plugin APIs used by this skill do not take credentials.
 - Set device ID before enabling SDK or starting manual tracking, but do it through the separate identity method rather than inside each tracking flow method.
 - Check `isAllRequiredPermissionsAndSensorsGranted()` before enable/start flows; use `showPermissionWizard(...)` when the product wants native permission onboarding.
 - For automatic tracking, assume `initializeSdk()` and device ID setup already happened and call `setEnableSdk(true)`.
@@ -75,6 +77,7 @@ The reference plugin source used to build this skill is the public repository [M
 - For one-time persistent manual tracking, use `startTrackAsPersistent()` and do not add a redundant manual `setTrackingMode(TrackingMode.Standard)` reset unless the installed native API proves it does not restore automatically on that platform.
 - For manual-only product flows, stop manual tracking and then disable the SDK with `setEnableSdk(false)`. Keep the SDK enabled after manual stop only when the product intentionally combines manual trips with automatic tracking.
 - If one service method stops all manual flows, track whether the active session was app-controlled persistent before deciding to restore `TrackingMode.Standard`.
+- Starting tracking while tracking is already active is idempotent: the SDK continues recording the existing track and does not start a new one.
 - Add future tags before starting a manually tagged trip; await the promise result before starting tracking where product correctness depends on tags being attached to the upcoming trip.
 - Remove future tags before disabling the SDK when cleanup depends on SDK/API availability.
 - Treat tagged manual flows as future-tag flows for upcoming trips. Do not imply processed-trip tag editing unless the latest installed plugin exposes that API.

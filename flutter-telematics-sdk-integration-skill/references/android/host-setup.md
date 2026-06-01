@@ -94,20 +94,15 @@ The plugin example also uses a host `proguard-files.pro`; follow the app's exist
 
 ## Advanced Tracking Settings
 
-For native Android settings, override the application class with `TelematicsSDKApp` and initialize `TrackingApi` before `super.onCreate()` as shown in the plugin README:
+For native Android settings, choose one application strategy. Kotlin/Java cannot inherit from both `FlutterApplication` and `TelematicsSDKApp`.
+
+Option 1: inherit from `TelematicsSDKApp` when the Flutter host app does not need another `Application` base class. This uses the plugin's preset initialization and lets the app override settings:
 
 ```kotlin
 import com.telematicssdk.TelematicsSDKApp
-import com.telematicssdk.tracking.TrackingApi
 import com.telematicssdk.tracking.Settings
 
 class App : TelematicsSDKApp() {
-    override fun onCreate() {
-        val api = TrackingApi.getInstance()
-        api.initialize(this, setTelematicsSettings())
-        super.onCreate()
-    }
-
     override fun setTelematicsSettings(): Settings {
         return Settings()
             .stopTrackingTimeout(Settings.stopTrackingTimeHigh)
@@ -118,7 +113,34 @@ class App : TelematicsSDKApp() {
 }
 ```
 
-Then set it in `AndroidManifest.xml`:
+Option 2: keep the existing app `Application`/`FlutterApplication` class and initialize native tracking settings manually:
+
+```kotlin
+import io.flutter.app.FlutterApplication
+import com.telematicssdk.tracking.TrackingApi
+import com.telematicssdk.tracking.Settings
+
+class App : FlutterApplication() {
+    override fun onCreate() {
+        super.onCreate()
+
+        val api = TrackingApi.getInstance()
+        if (!api.isInitialized()) {
+            api.initialize(this, telematicsSettings())
+        }
+    }
+
+    private fun telematicsSettings(): Settings {
+        return Settings()
+            .stopTrackingTimeout(Settings.stopTrackingTimeHigh)
+            .accuracy(Settings.accuracyHigh)
+            .autoStartOn(true)
+            .passiveDetectionOn(true)
+    }
+}
+```
+
+Then set the chosen class in `AndroidManifest.xml`:
 
 ```xml
 <application android:name=".App">
@@ -127,6 +149,10 @@ Then set it in `AndroidManifest.xml`:
 ```
 
 Only add this when the app needs native tracking settings. For ordinary Flutter integration, prefer Dart `TrackingApi` methods.
+
+## Testing Notes
+
+Android Emulator can validate integration flow, permissions, simulated location, and trip recording. HF Data cannot be fully tested because emulator accelerometer and gyroscope behavior does not match a real device. Use emulator route simulation for flow checks, and validate background tracking and sensor-heavy behavior on physical devices.
 
 ## Android-Specific Dart Calls
 

@@ -58,6 +58,8 @@ import TelematicsSdk, {
 
 The package supports React Native New Architecture through a TurboModule and falls back to the legacy native module. If the module is missing, the JS wrapper throws an error that usually means pods/Gradle sync and a native rebuild are required.
 
+No app-side credentials are passed to the React Native plugin. The SDK setup described by this skill does not require API keys in JS, `Info.plist`, or `AndroidManifest.xml`.
+
 ## Common Methods
 
 - `initializeSdk(): Promise<void>`
@@ -87,6 +89,12 @@ The package supports React Native New Architecture through a TurboModule and fal
 - `enableAccidents(enable: boolean): Promise<void>`
 - `isEnabledAccidents(): Promise<boolean>`
 - `isRTLDEnabled(): Promise<boolean>`
+
+Accident detection naming:
+
+- The verified RN plugin still exposes `enableAccidents(...)` and `isEnabledAccidents()`.
+- Native iOS/Android SDK implementations use the newer names `setAccidentDetectionEnabled(...)` and `isAccidentDetectionEnabled()`.
+- Do not generate calls to the new RN names until the installed plugin source exposes them. When updating the plugin itself, add the new names and mark the old RN methods deprecated.
 
 Enums:
 
@@ -173,6 +181,8 @@ await TelematicsSdk.initializeSdk();
 
 Do not call `initializeSdk()` from each tracking start method. On iOS, this JS call does not replace native launch initialization. `AppDelegate` still must call `RPEntry.initializeSDK()`.
 
+The iOS implementation may be a no-op, but the method must still exist for the React Native bridge and TurboModule/codegen surface to stay consistent across platforms. Call it once from JS app startup before the facade accepts tracking commands.
+
 Device identity setup:
 
 ```ts
@@ -180,6 +190,8 @@ await TelematicsSdk.setDeviceId(deviceId);
 ```
 
 Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
+
+The device ID is a Damoov platform user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov value.
 
 Automatic tracking:
 
@@ -208,6 +220,8 @@ await TelematicsSdk.setEnableSdk(true);
 await TelematicsSdk.setTrackingMode(TrackingMode.Standard);
 await TelematicsSdk.startManualTracking();
 ```
+
+Calling `startManualTracking()` or `startTrackAsPersistent()` while tracking is already active is idempotent: the SDK continues the existing track and does not start a new one. A facade may still check `isTracking()` to keep UI state clear.
 
 Standard manual tracking with future tags:
 
@@ -296,6 +310,8 @@ Future tag operations are promise-based in the React Native wrapper:
 const result = await TelematicsSdk.addFutureTrackTag('business', 'trip_form');
 ```
 
+`tag` and `source` are product-defined strings. The SDK does not define an enum or SDK-side value restrictions. Use `tag` for the business label and `source` for the app module or user action that created it.
+
 Available methods:
 
 - `getFutureTrackTags() -> Promise<{ status: string; tags: Tag[] }>`
@@ -332,3 +348,7 @@ The service should:
 - Sequence future tag calls before manual starts.
 - Convert promise rejections into app-facing errors.
 - Keep platform-specific controls behind `Platform.OS` checks.
+
+## Testing Notes
+
+iOS Simulator and Android Emulator can be used to exercise integration flow, permissions, simulated location, and trip recording. HF Data cannot be fully tested on emulators because accelerometer and gyroscope sensor data are not available like on a physical device. Use emulator/simulator location routes for flow checks, and run final background and sensor-heavy validation on real devices.

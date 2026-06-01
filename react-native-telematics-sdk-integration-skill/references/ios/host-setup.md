@@ -24,6 +24,8 @@ In the app `ios/Podfile`, enable dynamic frameworks:
 use_frameworks! :linkage => :dynamic
 ```
 
+Use dynamic framework linkage because the native TelematicsSDK iOS dependency is integrated through SPM as a dynamic framework. Do not switch this integration to static linkage for TelematicsSDK.
+
 Then run:
 
 ```bash
@@ -127,6 +129,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) {
     RPEntry.instance.application(application) {
       completionHandler(.newData)
+    }
+  }
+}
+```
+
+For SwiftUI-based iOS host apps, bridge this standard `AppDelegate` into the SwiftUI app entry point:
+
+```swift
+import SwiftUI
+
+@main
+struct ExampleApp: App {
+  @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+  var body: some Scene {
+    WindowGroup {
+      ContentView()
     }
   }
 }

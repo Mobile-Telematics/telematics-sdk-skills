@@ -51,6 +51,8 @@ import 'package:telematics_sdk/telematics_sdk.dart';
 final trackingApi = TrackingApi();
 ```
 
+No app-side credentials are passed to `TrackingApi()`. The SDK setup described by this skill does not require an API key or project credential in Dart code.
+
 Prefer wrapping this in an app service:
 
 ```dart
@@ -162,7 +164,7 @@ Device identity setup:
 await trackingApi.setDeviceID(deviceId: deviceId);
 ```
 
-Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. Do not repeat this call inside every tracking start method.
+Set the device ID from the app's login/session binding flow before enabling automatic SDK collection or starting manual tracking. The value is a Damoov platform user identifier in GUID format. Do not generate it locally unless the product backend explicitly proxies the Damoov value, and do not repeat this call inside every tracking start method.
 
 Automatic tracking:
 
@@ -191,6 +193,8 @@ await trackingApi.setEnableSdk(enable: true);
 await trackingApi.setTrackingMode(trackingMode: TrackingMode.standard);
 await trackingApi.startManualTracking();
 ```
+
+Calling `startManualTracking()` or `startTrackAsPersistent()` while tracking is already active is idempotent: the SDK continues the existing track and does not start a new one. A facade may still check `isTracking()` to keep UI state clear.
 
 Standard manual tracking with future tags:
 
@@ -284,6 +288,52 @@ final trackingApi = TrackingApi()
 await trackingApi.addFutureTrackTag(tag: 'business', source: 'trip_form');
 ```
 
+`tag` and `source` are product-defined strings. The SDK does not define an enum or SDK-side value restrictions. Use `tag` for the business label and `source` for the app module or user action that created it.
+
+When the facade exposes `addFutureTrackTag(...)`, implement it as an async wrapper around the raw plugin method and `onTagAdd`. Preserve the app's previous `onTagAdd` handler if one is already installed:
+
+```dart
+import 'dart:async';
+
+Future<FutureTagAddResult> addFutureTrackTag({
+  required String tag,
+  required String source,
+}) async {
+  final completer = Completer<FutureTagAddResult>();
+  final previousOnTagAdd = _trackingApi.onTagAdd;
+
+  _trackingApi.onTagAdd = (status, addedTag, activationTime) {
+    previousOnTagAdd?.call(status, addedTag, activationTime);
+    if (!completer.isCompleted && addedTag == tag) {
+      completer.complete(
+        FutureTagAddResult(
+          status: status,
+          tag: addedTag,
+          activationTime: activationTime,
+        ),
+      );
+    }
+  };
+
+  await _trackingApi.addFutureTrackTag(tag: tag, source: source);
+  return completer.future;
+}
+
+class FutureTagAddResult {
+  const FutureTagAddResult({
+    required this.status,
+    required this.tag,
+    required this.activationTime,
+  });
+
+  final Object status;
+  final String tag;
+  final Object? activationTime;
+}
+```
+
+Adjust the exact callback parameter types to the installed plugin source. The important contract is that the facade method completes only after native `onTagAdd` reports the result.
+
 Available methods:
 
 - `getFutureTrackTags()`
@@ -320,3 +370,7 @@ The service should:
 - Sequence future tag calls before manual starts.
 - Convert `PlatformException` and `UnsupportedError` into app-facing errors.
 - Keep platform-specific controls behind platform checks.
+
+## Testing Notes
+
+iOS Simulator and Android Emulator can be used to exercise integration flow, permissions, simulated location, and trip recording. HF Data cannot be fully tested on emulators because accelerometer and gyroscope sensor data are not available like on a physical device. Use emulator/simulator location routes for flow checks, and run final background and sensor-heavy validation on real devices.

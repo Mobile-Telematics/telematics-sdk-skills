@@ -115,6 +115,8 @@ The plugin registers itself as application and scene delegate, forwarding:
 
 The host app must still initialize `RPEntry` at launch. Do not guard `RPEntry.instance.application(...)` with device ID checks or custom state flags.
 
+Do not add a SwiftUI lifecycle bridge for ordinary Flutter integrations. The Flutter plugin registers application and scene delegates so the app developer should initialize `RPEntry` in the Flutter iOS host and let the plugin encapsulate lifecycle forwarding.
+
 ## iOS-Specific Dart Calls
 
 Guard iOS-only methods:
