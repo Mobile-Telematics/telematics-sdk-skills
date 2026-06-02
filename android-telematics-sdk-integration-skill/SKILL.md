@@ -50,7 +50,7 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
 9. For tracking flow sequences, SDK tracking modes, persistent tracking, and tags, load `references/android/integration-reference.md`.
 
 10. Implement repositories for all SDK API groups, not only tracking flows:
-    - `TelematicsRepository` for initialization/configuration helpers, SDK enablement, low-level tracking flows, status, diagnostics, notification intent, accident detection, passive detection, RTD access when requested, and heartbeats.
+    - `TelematicsRepository` for initialization/configuration helpers, SDK enablement, low-level tracking flows, status, permissions/sensors, SDK permissions wizard intent creation, diagnostics, notification intent, accident detection, passive detection, RTD access when requested, and heartbeats.
     - `TelematicsEventsRepository` for public SDK callbacks/listeners/receivers: tracking state callback, location listener, tracking events receiver, and speed-violation controls/callbacks when requested.
     - `TelematicsTagsRepository` for future tags, processed-trip tags, tag callbacks, and tag receivers.
     - `TelematicsTripsRepository` for track list/details, unsent trips, upload, origin dictionary/change, statistics/dashboard, share/unshare, and shared-track details.
@@ -102,6 +102,7 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
 - Do not add API-key or credentials setup to Android app code; the SDK initialization APIs used by this skill do not take app-provided credentials.
 - Set a valid device ID before enabling the SDK or starting tracking. Keep device identity separate from tracking flows: generated repositories should expose `setDeviceId(...)` for login/session binding, and start/enable tracking methods should not accept or reset the device ID.
 - Check `isAllRequiredPermissionsAndSensorsGranted()` before enabling the SDK. Do not rely on compile-time manifest declarations as runtime permission proof.
+- Expose the SDK permissions wizard in generated integrations. Add a repository method that returns `PermissionsWizardActivity.getStartWizardIntent(...)`, and add an Activity/Compose-friendly coordinator or usage example that launches it through Activity Result API. The repository should create the SDK `Intent`; UI should launch it and handle the result.
 - Do not remove or cap SDK manifest permissions without verifying merged manifest behavior and runtime requirements.
 - Use `setEnableSdk(true)` / `setEnableSdk(false)`. Do not use removed `setEnableSdk(enable, withCheckingPermissions)` overloads.
 - Expose `enableSdk()` and `disableSdk()` as separate repository methods. `disableSdk()` must only disable collection with `setEnableSdk(false)`; do not add identity-clearing parameters and do not call `logout()` from it.

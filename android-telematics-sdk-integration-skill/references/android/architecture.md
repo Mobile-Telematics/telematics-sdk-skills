@@ -10,13 +10,13 @@ Wrap `TrackingApi.getInstance()` in app-owned repositories. Do not scatter SDK c
 
 Use names that match the host app conventions, but keep these responsibilities clear:
 
-- `TelematicsRepository`: app-facing data layer entry point for SDK initialization support, device ID setup, SDK enable/disable, low-level tracking flows, status, diagnostics, notification intent, accident detection, passive detection, RTD access when requested, and heartbeats.
+- `TelematicsRepository`: app-facing data layer entry point for SDK initialization support, device ID setup, SDK enable/disable, low-level tracking flows, status, permission/sensor checks, SDK permissions wizard intent creation, diagnostics, notification intent, accident detection, passive detection, RTD access when requested, and heartbeats.
 - `TelematicsEventsRepository`: app-facing data layer entry point for public SDK callbacks/listeners/receivers: `TrackingStateListener`, `LocationListener`, `TrackingEventsReceiver`, and speed-violation listener/threshold controls when requested.
 - `TelematicsTagsRepository`: app-facing data layer entry point for future tags, processed-trip tags, tag callbacks, and tag receivers.
 - `TelematicsTripsRepository`: app-facing data layer entry point for track list/details, unsent trips, upload, origin dictionary/change, statistics/dashboard, share/unshare, and shared-track details.
 - `TelematicsModePreferencesRepository`: app-facing preferences/settings entry point for persisted trip recording mode state, e.g. `(TripRecordMode, isActive)`. Implement it with the host app's existing DataStore, SharedPreferences, database, settings repository, or local data source.
 - `TrackingApi`: external SDK data source. It is called by the telematics repositories, not by UI or domain layers.
-- `TelematicsPermissionCoordinator`: optional UI/app-layer coordinator for runtime permission requests and optional SDK `PermissionsWizardActivity` launch/result handling. It can call repository enable methods after permissions are granted.
+- `TelematicsPermissionCoordinator`: UI/app-layer coordinator for runtime permission requests and SDK `PermissionsWizardActivity` launch/result handling. It can call repository enable methods or use cases after permissions are granted. In simple apps this may be a small Activity/Compose launcher example instead of a separate class, but generated integration must show how to launch the SDK wizard.
 - `TrackingSessionRequest`: app-level input for starting tracking, e.g. flow, optional tag/source, optional persistent interval. Device identity is configured separately from tracking start/stop flows.
 - `TrackingFlow`: app-level flow such as automatic enablement, standard manual start/stop, app-controlled persistent manual start/stop, or one-time persistent manual start/stop, with or without tags.
 - `TelematicsError`: app-level error mapping for permission failures, invalid device ID, disabled SDK state, rejected start/stop calls, and tag processing failures.
@@ -161,12 +161,59 @@ interface TelematicsRepository {
     /** Returns the latest cached device ID registration state. */
     fun getDeviceIdRegistrationState(): DeviceIdRegistrationState
 
+    /** Returns whether all SDK-required runtime permissions and sensors are granted. */
+    fun isAllRequiredPermissionsAndSensorsGranted(): Boolean
+
+    /** Returns whether all SDK-required runtime permissions are granted. */
+    fun isAllRequiredPermissionsGranted(): Boolean
+
+    /** Creates the SDK permissions wizard intent for Activity Result API launch. */
+    fun createPermissionsWizardIntent(
+        context: Context,
+        enableAggressivePermissionsWizard: Boolean = false,
+        enableAggressivePermissionsWizardPage: Boolean = false,
+    ): Intent
+
     /** Sends a custom SDK heartbeat with an app-defined reason. */
     fun sendCustomHeartbeats(reason: String): TelematicsResult
 }
 ```
 
 Keep each flow's stop method adjacent to its start method in implementations. The stop must match that flow's SDK ownership: automatic tracking disables SDK collection, standard manual tracking stops and disables collection, tagged manual tracking removes future tags before stopping when cleanup is required, app-controlled persistent tracking also restores `TrackingMode.Standard`, and one-time persistent tracking leaves SDK mode reset ownership to `startTrackAsPersistent()` semantics.
+
+Expose permission wizard launch from UI without moving SDK calls into the UI. The repository creates the SDK intent; Activity or Compose code owns the launcher and result handling:
+
+```kotlin
+class TelematicsPermissionCoordinator(
+    private val telematicsRepository: TelematicsRepository
+) {
+    fun createPermissionsWizardIntent(
+        context: Context,
+        enableAggressivePermissionsWizard: Boolean = false,
+        enableAggressivePermissionsWizardPage: Boolean = false,
+    ): Intent =
+        telematicsRepository.createPermissionsWizardIntent(
+            context = context,
+            enableAggressivePermissionsWizard = enableAggressivePermissionsWizard,
+            enableAggressivePermissionsWizardPage = enableAggressivePermissionsWizardPage,
+        )
+
+    fun mapWizardResult(resultCode: Int): TelematicsPermissionWizardResult =
+        when (resultCode) {
+            PermissionsWizardActivity.WIZARD_RESULT_ALL_GRANTED -> TelematicsPermissionWizardResult.AllGranted
+            PermissionsWizardActivity.WIZARD_RESULT_NOT_ALL_GRANTED -> TelematicsPermissionWizardResult.NotAllGranted
+            else -> TelematicsPermissionWizardResult.Canceled
+        }
+}
+
+sealed interface TelematicsPermissionWizardResult {
+    data object AllGranted : TelematicsPermissionWizardResult
+    data object NotAllGranted : TelematicsPermissionWizardResult
+    data object Canceled : TelematicsPermissionWizardResult
+}
+```
+
+For simple apps, it is acceptable to skip a separate coordinator class and put the Activity Result launcher in Activity/Compose, but generated integration must include a concrete `createPermissionsWizardIntent(...)` call path.
 
 Persist app-level mode state separately from SDK state:
 

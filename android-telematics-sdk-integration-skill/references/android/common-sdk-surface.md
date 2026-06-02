@@ -203,6 +203,61 @@ Documented constants:
 
 Prefer the Activity Result API in new app code. If modifying legacy code that already uses `startActivityForResult`, keep the existing style unless the user requests modernization.
 
+Generated integrations must expose an app-facing way to launch the wizard. Keep SDK `Intent` creation in the repository or permission coordinator, and keep the actual launch in Activity/Compose UI:
+
+```kotlin
+import android.content.Context
+import android.content.Intent
+import com.telematicssdk.tracking.utils.permissions.PermissionsWizardActivity
+
+interface TelematicsRepository {
+    /** Creates the SDK permissions wizard intent for Activity Result API launch. */
+    fun createPermissionsWizardIntent(
+        context: Context,
+        enableAggressivePermissionsWizard: Boolean = false,
+        enableAggressivePermissionsWizardPage: Boolean = false,
+    ): Intent
+}
+
+class DefaultTelematicsRepository : TelematicsRepository {
+    override fun createPermissionsWizardIntent(
+        context: Context,
+        enableAggressivePermissionsWizard: Boolean,
+        enableAggressivePermissionsWizardPage: Boolean,
+    ): Intent =
+        PermissionsWizardActivity.getStartWizardIntent(
+            context,
+            enableAggressivePermissionsWizard,
+            enableAggressivePermissionsWizardPage,
+        )
+}
+```
+
+For Activity-based apps:
+
+```kotlin
+private val permissionsWizardLauncher =
+    registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        when (result.resultCode) {
+            PermissionsWizardActivity.WIZARD_RESULT_ALL_GRANTED -> {
+                // Enable SDK or call the confirmed product workflow.
+            }
+            PermissionsWizardActivity.WIZARD_RESULT_NOT_ALL_GRANTED,
+            PermissionsWizardActivity.WIZARD_RESULT_CANCELED -> {
+                // Forward the state to UI using the host app's error/result model.
+            }
+        }
+    }
+
+fun openTelematicsPermissionsWizard() {
+    permissionsWizardLauncher.launch(
+        telematicsRepository.createPermissionsWizardIntent(this)
+    )
+}
+```
+
+For Compose, create the launcher with `rememberLauncherForActivityResult(...)`, obtain `Context` from `LocalContext.current`, and launch the repository-created intent from an event handler.
+
 Do not hardcode wizard result text in Kotlin; get user-visible strings from the host app's `Settings`/localization layer.
 
 ## Listeners And Receivers
