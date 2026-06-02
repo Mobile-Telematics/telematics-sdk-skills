@@ -1,0 +1,4 @@
+interface:
+  display_name: "Android Telematics SDK Integration"
+  short_description: "Integrate Damoov Android SDK safely"
+  default_prompt: "Use $android-telematics-sdk-integration-skill to integrate or migrate Damoov TelematicsSDK usage in this Android Kotlin app."
