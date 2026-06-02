@@ -23,7 +23,7 @@ Use names that match the host app conventions, but keep these responsibilities c
 
 Avoid putting business decisions into `Application` or the launch activity. `Application` should initialize the SDK or delegate initialization to the repository/DI startup. UI layers should call use cases for product workflows and repositories for lower-level data access when the app already permits direct repository use. UI must not call `TrackingApi` directly.
 
-High-level operating modes from the Android tracking modes guide are app/domain workflows, not SDK data-access primitives. Ask the user whether to add use cases before generating them. The question must list the proposed use cases and briefly describe each one:
+High-level operating modes from the Android tracking modes guide are app/domain workflows, not SDK data-access primitives. Ask the user whether to add use cases before deciding between repository-only integration and generated use cases. The question is mandatory for a new/full telematics integration in every host app, including apps with no current domain layer, unless the user has already answered it in the current request. Existing domain/use-case classes are a reason to recommend use cases, not a reason to skip the question. Absence of a domain/use-case layer is not a reason to skip use cases; if the user chooses use cases, create a minimal use-case/workflow layer that matches the app structure. The question must list the proposed use cases and briefly describe each one:
 
 ```text
 Do you want me to add use cases for telematics workflows, or keep the integration repository-only?
@@ -41,7 +41,7 @@ Proposed use cases:
 - LogoutUseCase: set trip recording mode to DISABLED/inactive, then call SDK logout.
 ```
 
-If the user chooses repository-only integration, keep these workflows out of generated use-case classes and expose only the requested repository/coordinator API. If the user wants use cases or the host app already has a suitable domain/use-case layer, implement them as use cases that orchestrate `TelematicsRepository`. If the host app is single-module or has no domain layer, keep the same workflow names and behavior in the app's existing package structure, for example as repository methods, coordinator methods, or plain application-layer classes:
+If the host app already has a suitable domain/use-case layer, recommend use cases in the question and adapt to the existing base classes, DI, dispatcher, and result patterns after the user confirms. If the host app has no domain/use-case layer, still ask; if the user wants use cases, create a small telematics workflow/use-case package in the appropriate module or package for the app. If the user chooses repository-only integration, keep these workflows out of generated use-case classes and expose only the requested repository/coordinator API. If the user wants use cases, implement them as use cases that orchestrate `TelematicsRepository`. In a single-module app, keep the same workflow names and behavior in a simple `domain`, `usecase`, or `telematics` workflow package rather than forcing a new module:
 
 - `EnableAutomaticModeUseCase`
 - `EnableDisabledModeUseCase`
@@ -54,7 +54,7 @@ If the user chooses repository-only integration, keep these workflows out of gen
 - `SetTripRecordModeUseCase`
 - `GetTripRecordModeUseCase`
 
-Use the project's existing use-case pattern when available and when use cases are requested. Keep repositories focused on SDK operations and SDK state; keep product trip-recording mode decisions in use cases when use cases are part of the integration.
+Use the project's existing use-case pattern when available and when use cases are requested. During inspection, explicitly check for existing `UseCase`, `CoroutineUseCase`, `FlowUseCase`, interactor, command, or domain workflow classes; if found, include that observation in the question and recommend use cases. If no such pattern exists and the user chooses use cases, create minimal plain Kotlin use-case classes with constructor-injected repositories and adapt DI only when the host app already uses DI. Keep repositories focused on SDK operations and SDK state; keep product trip-recording mode decisions in use cases when use cases are part of the integration.
 
 Inside repositories, separate responsibilities with sections and private helpers rather than service/data-source classes:
 

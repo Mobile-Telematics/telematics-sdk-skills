@@ -56,7 +56,7 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
     - `TelematicsTripsRepository` for track list/details, unsent trips, upload, origin dictionary/change, statistics/dashboard, share/unshare, and shared-track details.
     Keep `TrackingApi` as the immediate external data source. Do not create extra SDK DataSource wrappers by default.
 
-11. Before adding use cases, ask whether the user wants use cases generated/integrated. Do not add use cases by default in a simple repository-only integration. Add use cases only when the user explicitly asks for them, when the app already has a domain/use-case layer and the requested change belongs there, or when mode-selector orchestration would otherwise be duplicated in UI/repositories. Ask:
+11. Before choosing repository-only integration or generating use cases for a new/full telematics integration, ask whether the user wants use cases generated/integrated. This is a required architecture decision for every host app, including single-module apps and apps with no current domain layer. Do not silently skip the question just because the app can work with repositories only, and do not silently add use cases just because the app already has a domain/use-case layer. Existing use-case/domain classes only determine the recommended answer and implementation style. If no domain/use-case layer exists and the user chooses use cases, create a minimal app-appropriate use-case/workflow layer instead of falling back to repository-only. Skip this question only when the user has already answered it in the current request or the current task is a narrow fix/review that does not add or redesign telematics workflows. Ask:
 
     ```text
     Do you want me to add use cases for telematics workflows, or keep the integration repository-only?
@@ -74,7 +74,7 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
     - LogoutUseCase: set trip recording mode to DISABLED/inactive, then call SDK logout.
     ```
 
-    If use cases are requested or clearly fit the existing architecture, implement high-level operating modes from `android_tracking_modes.md` as domain/application use cases:
+    If the app already has a domain/use-case layer, mention that use cases are recommended for this integration, then wait for the user's choice before implementing them. If the app has no domain/use-case layer, still ask; explain that choosing use cases will create a small telematics workflow/use-case package that fits the app's modular or single-module structure. If use cases are requested, implement high-level operating modes from `android_tracking_modes.md` as domain/application use cases:
     - `EnableAutomaticModeUseCase`
     - `EnableDisabledModeUseCase`
     - `PrepareOnDemandModeUseCase`
@@ -83,7 +83,7 @@ Do not ask the user for a local SDK source checkout and do not include steps tha
     - `SignOnShiftUseCase`
     - `SignOffShiftUseCase`
     - `LogoutUseCase`
-    These use cases orchestrate `TelematicsRepository`; do not put product-mode orchestration only in UI or only as repository methods unless the app has no domain/use-case layer or the user chose repository-only integration. If the app has a trip-recording mode selector and use cases are requested, implement `SetTripRecordModeUseCase` and `GetTripRecordModeUseCase` over a persisted `TripRecordMode` state. Do not keep `setTripRecordMode(...)` business branching inside `TelematicsRepository` when use cases are part of the integration.
+    These use cases orchestrate `TelematicsRepository`; do not put product-mode orchestration only in UI or only as repository methods unless the user chose repository-only integration. If the app has a trip-recording mode selector and use cases are requested, implement `SetTripRecordModeUseCase` and `GetTripRecordModeUseCase` over a persisted `TripRecordMode` state. Do not keep `setTripRecordMode(...)` business branching inside `TelematicsRepository` when use cases are part of the integration. If the user chooses repository-only integration, note the tradeoff briefly and keep the generated repository API sufficient for the app to add use cases later.
 
 12. Implement repositories with all supported flows and public SDK method groups. In `TelematicsRepository`, order tracking methods so the user's primary flow appears first. Add a small preferences/local settings abstraction for telematics mode state when needed, using the host app's existing DataStore, SharedPreferences, database, or settings repository. Keep changes outside the integration surface minimal. Do not add dependencies beyond the SDK and existing app stack unless the user explicitly approves.
 

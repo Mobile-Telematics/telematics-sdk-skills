@@ -8,13 +8,14 @@ Use these skills when you want an agent to make SDK integration decisions from v
 
 | Skill | Use When |
 | --- | --- |
+| [Android Telematics SDK Integration](android-telematics-sdk-integration-skill/) | Integrating, migrating, reviewing, or debugging Damoov TelematicsSDK in native Android Kotlin apps. |
 | [iOS Telematics SDK Integration](ios-telematics-sdk-integration-skill/) | Integrating, migrating, reviewing, or debugging Damoov TelematicsSDK in iOS apps. |
 | [Flutter Telematics SDK Integration](flutter-telematics-sdk-integration-skill/) | Integrating, migrating, reviewing, or debugging the Damoov Telematics SDK Flutter plugin in Flutter apps, including Android and iOS host setup. |
 | [React Native Telematics SDK Integration](react-native-telematics-sdk-integration-skill/) | Integrating, migrating, reviewing, or debugging the Damoov Telematics SDK React Native plugin in React Native apps, including Android and iOS host setup. |
 
 ## Repository Layout
 
-Each skill keeps platform-specific reference material under `references/<platform>/`. This keeps iOS, Flutter, and React Native skills consistent and leaves room for future Android skills without mixing platform setup details.
+Each skill keeps platform-specific reference material under `references/<platform>/`. This keeps Android, iOS, Flutter, and React Native skills consistent without mixing platform setup details.
 
 ## Install All Skills
 
@@ -103,6 +104,104 @@ npx skills add . --skill '*' --agent codex -y
 ```
 
 ## Skill Details
+
+### Android Telematics SDK Integration
+
+The Android skill helps an agent with:
+
+- Gradle/Maven repository and dependency setup using the SDK version resolved from Gradle or Maven metadata, not the changelog alone.
+- Native Android Kotlin integration around `TrackingApi`, `Settings`, and `TelematicsSDKApp`.
+- App-owned repository architecture with `TelematicsRepository`, `TelematicsEventsRepository`, `TelematicsTagsRepository`, and `TelematicsTripsRepository`.
+- Optional use cases for telematics workflows, with a required user choice before adding them even when the app has no existing domain layer.
+- Automatic tracking, standard manual tracking, app-controlled persistent manual tracking, one-time persistent manual tracking, and tag variants.
+- Higher-level operating modes such as always-on, shift mode, on-demand, and disabled mode.
+- SDK callbacks, listeners, receivers, speed violation events, tracking state, location updates, tag receivers, and trip APIs.
+- Runtime permissions, manifest checks, foreground service behavior, and Android lifecycle setup.
+- Migration away from deprecated Android SDK 3.x API.
+
+Install only this skill for Claude Code:
+
+```bash
+npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --skill android-telematics-sdk-integration-skill --agent claude
+```
+
+Install only this skill for Codex:
+
+```bash
+npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills --skill android-telematics-sdk-integration-skill --agent codex
+```
+
+Install only this skill with `skills`:
+
+```bash
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill android-telematics-sdk-integration-skill --agent claude-code -y
+npx skills add Mobile-Telematics/telematics-sdk-skills --skill android-telematics-sdk-integration-skill --agent codex -y
+```
+
+Or install from the skill path:
+
+```bash
+npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills/android-telematics-sdk-integration-skill --agent claude
+npx ai-agent-skills install Mobile-Telematics/telematics-sdk-skills/android-telematics-sdk-integration-skill --agent codex
+```
+
+Update only this skill:
+
+```bash
+npx ai-agent-skills sync android-telematics-sdk-integration-skill --agent claude
+npx ai-agent-skills sync android-telematics-sdk-integration-skill --agent codex
+npx skills update android-telematics-sdk-integration-skill -y
+```
+
+Once installed, ask your coding agent to use the skill in a native Android Kotlin app repository.
+
+Example prompts:
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app.
+```
+
+Primary flow prompts:
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be automatic tracking.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be standard manual tracking without tags.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be standard manual tracking with tags.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be app-controlled persistent manual tracking without tags.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be app-controlled persistent manual tracking with tags.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be one-time persistent manual tracking without tags.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Primary flow should be one-time persistent manual tracking with tags.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to integrate Damoov TelematicsSDK into this native Android Kotlin app. Ask whether to add telematics use cases before implementing the integration.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to migrate this app away from deprecated Android TelematicsSDK APIs.
+```
+
+```text
+Use $android-telematics-sdk-integration-skill to review the existing TelematicsSDK integration and identify Gradle, lifecycle, permissions, tracking, callbacks, tags, and trip API issues.
+```
 
 ### iOS Telematics SDK Integration
 

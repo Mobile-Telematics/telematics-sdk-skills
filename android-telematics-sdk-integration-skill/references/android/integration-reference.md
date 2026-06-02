@@ -79,7 +79,7 @@ Supported flows:
 
 ## High-Level Operating Mode Use Cases
 
-Expose these product-level modes as use cases only when the user asks for use cases or when the host app already has a matching domain/use-case layer. They come from the Android tracking modes guide and are app-level policies over SDK enablement/tracking calls. Use cases should orchestrate `TelematicsRepository`; they should not call `TrackingApi` directly.
+Expose these product-level modes as use cases only when the user asks for use cases after the architecture question. A matching domain/use-case layer means use cases are recommended and should follow the host app's existing pattern, but it does not remove the requirement to ask. If no domain/use-case layer exists and the user chooses use cases, create a minimal app-appropriate use-case/workflow package and keep the classes plain unless the app already has a base use-case abstraction. These modes come from the Android tracking modes guide and are app-level policies over SDK enablement/tracking calls. Use cases should orchestrate `TelematicsRepository`; they should not call `TrackingApi` directly.
 
 Use cases that enable or start tracking assume the SDK device ID has already been configured through `setDeviceId(...)` or a prepare/session-binding use case. Do not add `deviceId` parameters to start/enable use cases.
 
