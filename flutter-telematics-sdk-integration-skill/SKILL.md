@@ -1,6 +1,6 @@
 ---
 name: flutter-telematics-sdk-integration-skill
-description: Use when designing, integrating, migrating, reviewing, or debugging the Damoov Telematics SDK Flutter plugin in Flutter apps, especially pubspec setup, TrackingApi usage, Android Gradle/manifest/proguard setup, iOS Info.plist/AppDelegate/SceneDelegate setup, permission wizard wiring, automatic/manual tracking flows, persistent tracking, future tags, platform-specific APIs, and validation against the Flutter plugin source.
+description: Use when designing, integrating, migrating, reviewing, or debugging the Damoov Telematics SDK Flutter plugin in Flutter apps, especially pubspec setup, TrackingApi usage, Android Gradle/manifest/proguard setup, Android TelematicsSDKApp vs custom Application initialization, iOS Info.plist/AppDelegate/SceneDelegate setup, permission wizard wiring, automatic/manual tracking flows, persistent tracking, future tags, platform-specific APIs, and validation against the Flutter plugin source.
 ---
 
 # Flutter Telematics SDK Integration
@@ -31,7 +31,7 @@ The reference plugin source used to build this skill is the public repository [M
 
 4. Load platform references only as needed:
    - `references/flutter/plugin-api.md` for Dart `TrackingApi`, streams, flow sequencing, and facade recommendations.
-   - `references/android/host-setup.md` for Android manifest, Gradle, permissions, proguard, `Application`, and advanced tracking settings.
+   - `references/android/host-setup.md` for Android manifest, Gradle, permissions, proguard, `Application`, `TelematicsSDKApp` selection, and advanced tracking settings.
    - `references/ios/host-setup.md` for iOS `Info.plist`, `AppDelegate`, Flutter implicit engine registration, SceneDelegate, and lifecycle forwarding.
 
 5. Before implementing a new reusable Flutter service/facade, ask which primary tracking flow should be placed first:

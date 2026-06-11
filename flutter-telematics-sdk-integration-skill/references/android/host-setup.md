@@ -94,9 +94,19 @@ The plugin example also uses a host `proguard-files.pro`; follow the app's exist
 
 ## Advanced Tracking Settings
 
-For native Android settings, choose one application strategy. Kotlin/Java cannot inherit from both `FlutterApplication` and `TelematicsSDKApp`.
+For native Android settings, choose one application strategy. `TelematicsSDKApp` is a convenience `Application` base class with preset Android SDK initialization; it is not mandatory for every Flutter integration.
 
-Option 1: inherit from `TelematicsSDKApp` when the Flutter host app does not need another `Application` base class. This uses the plugin's preset initialization and lets the app override settings:
+Use `TelematicsSDKApp` when all of these are true:
+
+- The Flutter host app can own its Android `Application` class.
+- The app does not already need a different `Application`/`FlutterApplication` base class or another SDK-provided base class.
+- The product accepts the preset initialization shape and only needs to customize settings by overriding `setTelematicsSettings()`.
+
+Do not inherit from `TelematicsSDKApp` when the app already has an `Application` class that initializes Flutter, DI, analytics, crash reporting, notifications, or another SDK. In that case, keep the existing base class and call `TrackingApi.getInstance().initialize(this, settings)` manually from `onCreate()`.
+
+Kotlin/Java cannot inherit from both `FlutterApplication` and `TelematicsSDKApp`.
+
+Option 1: inherit from `TelematicsSDKApp` for convenience preset initialization:
 
 ```kotlin
 import com.telematicssdk.TelematicsSDKApp
@@ -149,6 +159,12 @@ Then set the chosen class in `AndroidManifest.xml`:
 ```
 
 Only add this when the app needs native tracking settings. For ordinary Flutter integration, prefer Dart `TrackingApi` methods.
+
+Decision summary:
+
+- No custom native settings needed: do not add an app `Application` class just for this; configure Flutter/Dart integration and host permissions.
+- Custom native settings and no existing `Application` base conflict: use `TelematicsSDKApp` and override `setTelematicsSettings()`.
+- Existing `Application` class or base-class conflict: do not use `TelematicsSDKApp`; initialize `TrackingApi` manually with the same `Settings()` builder values.
 
 ## Testing Notes
 
